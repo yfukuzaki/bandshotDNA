@@ -1,21 +1,4 @@
 <!DOCTYPE html>
-<html>
-<body>
-    <video id="camera" autoplay playsinline style="width: 100%; border: 2px solid red;"></video>
-    <button id="startBtn">カメラ起動</button>
-
-    <script>
-        document.getElementById('startBtn').addEventListener('click', async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } }
-                });
-                const video = document.getElementById('camera');
-                video.srcObject = stream;
-                // ここで確実にplayを呼び出す
-                await video.play();
-                console.log("カメラ起動成功");
-            } catch (err) {<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -111,13 +94,6 @@
         });
 
         window.onload = startCamera;
-    </script>
-</body>
-</html>
-                console.error("エラー:", err);
-                alert("エラー: " + err.message);
-            }
-        });
     </script>
 </body>
 </html>
