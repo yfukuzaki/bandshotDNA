@@ -3,97 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ゲル撮影ガイドアプリ</title>
+    <title>ゲル撮影専用アプリ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        .guide-box {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 80vw;
-            height: 80vw;
-            transform: translate(-50%, -50%);
-            border: 3px solid rgba(255, 255, 255, 0.8);
-            pointer-events: none;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-        }
+        body { background: #1a1a1a; color: #fff; font-family: sans-serif; }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+<body class="p-4 flex flex-col items-center">
 
-    <div id="cameraContainer" class="relative w-full max-w-md overflow-hidden rounded-lg bg-black">
-        <video id="video" autoplay playsinline muted class="w-full h-auto"></video>
-        <div class="guide-box"></div>
+    <h1 class="text-xl font-bold mb-4">ゲル撮影アプリ</h1>
+    
+    <!-- ガイド枠を表示するコンテナ -->
+    <div id="captureArea" class="border-4 border-dashed border-green-500 w-full max-w-sm aspect-square flex flex-col items-center justify-center mb-6 bg-black/50">
+        <p id="status" class="text-green-400">真上から撮影してください</p>
+        <img id="preview" class="hidden w-full h-full object-contain" alt="撮影プレビュー">
     </div>
 
-    <div class="mt-6 flex gap-4">
-        <button id="captureBtn" class="bg-blue-600 hover:bg-blue-500 px-8 py-3 rounded-full font-bold">撮影する</button>
-    </div>
-
-    <div id="previewContainer" class="hidden mt-6 w-full max-w-md flex flex-col items-center">
-        <img id="previewImage" class="w-full border-2 border-white rounded-lg">
-        <div class="mt-4 flex gap-4">
-            <button id="retakeBtn" class="bg-gray-600 px-6 py-2 rounded">撮り直す</button>
-            <button id="analyzeBtn" class="bg-green-600 px-6 py-2 rounded font-bold">解析へ進む</button>
-        </div>
-    </div>
+    <!-- カメラ起動ボタン -->
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
+    <button id="captureBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-full font-bold shadow-lg">
+        カメラを起動して撮影
+    </button>
 
     <script>
-        const video = document.getElementById('video');
+        const cameraInput = document.getElementById('cameraInput');
         const captureBtn = document.getElementById('captureBtn');
-        const previewContainer = document.getElementById('previewContainer');
-        const previewImage = document.getElementById('previewImage');
-        const retakeBtn = document.getElementById('retakeBtn');
-        const analyzeBtn = document.getElementById('analyzeBtn');
+        const preview = document.getElementById('preview');
+        const status = document.getElementById('status');
 
-        let stream = null;
-
-        // カメラ起動
-        async function startCamera() {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } },
-                    audio: false
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                console.error("カメラ起動エラー:", err);
-                alert("カメラを起動できませんでした。権限を確認してください。");
-            }
-        }
-
-        // 撮影処理
+        // ボタンクリックでファイル入力（カメラ）を誘発
         captureBtn.addEventListener('click', () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0);
-            
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            previewImage.src = dataUrl;
-            
-            // カメラ停止
-            stream.getTracks().forEach(track => track.stop());
-            
-            document.getElementById('cameraContainer').classList.add('hidden');
-            captureBtn.classList.add('hidden');
-            previewContainer.classList.remove('hidden');
+            cameraInput.click();
         });
 
-        retakeBtn.addEventListener('click', () => {
-            document.getElementById('cameraContainer').classList.remove('hidden');
-            captureBtn.classList.remove('hidden');
-            previewContainer.classList.add('hidden');
-            startCamera();
+        // 撮影完了時の処理
+        cameraInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    preview.src = e.target.result;
+                    preview.classList.remove('hidden');
+                    status.classList.add('hidden');
+                    console.log("撮影成功: 画像を取得しました");
+                };
+                reader.readAsDataURL(file);
+            }
         });
-
-        analyzeBtn.addEventListener('click', () => {
-            alert("画像が保存されました。解析ロジックを実装します。");
-            // ここで解析フェーズへ移行
-        });
-
-        window.onload = startCamera;
     </script>
 </body>
 </html>
