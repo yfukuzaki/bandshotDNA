@@ -6,59 +6,73 @@
     <title>DNAゲル撮影プロトタイプ</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        video {
-            display: block !important;
-            opacity: 1 !important;
+        body { background: #000; }
+        #canvas-container {
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 3 / 4;
+            background: #000;
+            border: 4px solid #4a5568;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+        canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            background: #000;
         }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+<body class="flex flex-col items-center justify-center min-h-screen text-white p-4">
 
     <h1 class="text-xl font-bold mb-4">DNAゲル撮影カメラ</h1>
     <div id="status" class="mb-4 text-yellow-400 font-bold p-2 bg-gray-800 rounded">画面をタップしてカメラ起動</div>
     
-    <div class="relative w-full max-w-sm aspect-[3/4] bg-black border-4 border-gray-600 rounded-lg overflow-hidden">
-        <video id="video" autoplay playsinline webkit-playsinline muted class="w-full h-full"></video>
+    <div id="canvas-container">
+        <canvas id="outputCanvas"></canvas>
     </div>
+
+    <!-- 映像ソース用 (非表示) -->
+    <video id="video" playsinline webkit-playsinline muted class="hidden"></video>
 
     <script>
         const video = document.getElementById('video');
+        const canvas = document.getElementById('outputCanvas');
+        const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
-        let currentStream = null;
 
         async function startCamera() {
             try {
                 status.innerText = "カメラ起動中...";
                 
-                const constraints = {
-                    video: {
-                        facingMode: { ideal: "environment" }
-                    }
-                };
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } }
+                });
 
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                currentStream = stream;
                 video.srcObject = stream;
+                await video.play();
 
-                video.onloadedmetadata = () => {
-                    video.play().catch(e => console.error("Play error:", e));
-                };
+                // Canvasサイズを調整
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
 
-                video.oncanplay = () => {
-                    video.play().catch(e => console.error("Play error oncanplay:", e));
-                    status.innerText = "リアカメラ起動成功！描画中...";
-                    status.classList.replace('text-yellow-400', 'text-green-400');
-                };
-
+                // 描画ループ開始
+                draw();
+                
+                status.innerText = "カメラ起動成功！描画中...";
+                status.classList.replace('text-yellow-400', 'text-green-400');
             } catch (err) {
-                console.error(err);
-                status.innerText = "エラー: " + err.name;
-                status.classList.replace('text-yellow-400', 'text-red-400');
+                status.innerText = "エラー: " + err.message;
+                status.classList.add('text-red-400');
             }
+        }
+
+        function draw() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            }
+            requestAnimationFrame(draw);
         }
 
         document.body.addEventListener('click', () => {
