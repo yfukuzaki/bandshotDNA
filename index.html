@@ -3,50 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カメラ起動テスト</title>
+    <title>DNAゲル撮影アプリ</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+<body class="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
     
-    <h1 class="text-xl font-bold mb-4">リアカメラ起動テスト</h1>
+    <h1 class="text-lg font-bold mb-4">リアカメラ起動テスト</h1>
     
-    <button id="start-btn" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-lg hover:bg-blue-700 transition">
-        リアカメラで起動する
-    </button>
-
-    <div id="error-msg" class="mt-4 text-red-600 font-bold p-2 bg-white rounded border border-red-200"></div>
+    <div id="status" class="mb-4 text-yellow-400 font-bold">起動準備中...</div>
     
-    <video id="video" autoplay playsinline class="w-full max-w-md mt-6 border-4 border-white rounded-lg shadow-xl bg-black"></video>
+    <!-- 映像表示用のvideo要素 -->
+    <video id="video" autoplay playsinline class="w-full max-w-md bg-black border-4 border-gray-600 rounded-lg"></video>
 
     <script>
-        const btn = document.getElementById('start-btn');
         const video = document.getElementById('video');
-        const errorMsg = document.getElementById('error-msg');
+        const status = document.getElementById('status');
 
-        btn.onclick = async () => {
-            errorMsg.innerText = "起動中...";
+        async function startCamera() {
             try {
-                // リアカメラを最優先で指定
+                // 制限を緩和したカメラ要求
+                // exactを外し、idealでリアカメラを指定
                 const constraints = {
-                    video: { facingMode: { exact: "environment" } }
+                    video: {
+                        facingMode: { ideal: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 };
 
-                // もし exact で失敗した時のために、フォールバック（環境指定なし）を用意
-                let stream;
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                } catch (e) {
-                    console.warn("exact指定失敗、通常モードで再試行", e);
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                }
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
                 video.srcObject = stream;
-                errorMsg.innerText = "リアカメラ起動成功！";
+                status.innerText = "カメラ起動成功！映像を待機中...";
+
+                // 再生処理
+                video.onloadedmetadata = () => {
+                    video.play().then(() => {
+                        status.innerText = "リアカメラ起動成功！";
+                    }).catch(e => {
+                        status.innerText = "再生エラー: " + e.message;
+                    });
+                };
             } catch (err) {
-                errorMsg.innerText = "エラー: " + err.name + " (" + err.message + ")";
+                // OverconstrainedErrorなどが発生した際のフォールバック
+                status.innerText = "エラー: " + err.name + " - " + err.message;
                 console.error(err);
             }
-        };
+        }
+
+        window.onload = startCamera;
     </script>
 </body>
 </html>
