@@ -8,50 +8,54 @@
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
     
-    <h1 class="text-lg font-bold mb-4">リアカメラ起動テスト</h1>
-    <div id="status" class="mb-4 text-yellow-400 font-bold">起動準備中...</div>
+    <h1 class="text-xl font-bold mb-2">DNAゲル撮影カメラ</h1>
+    <div id="status" class="mb-4 text-yellow-400 font-bold">画面をタップしてカメラ起動</div>
     
-    <!-- 映像表示用のvideo要素 -->
-    <video id="video" autoplay playsinline muted class="w-full max-w-md bg-black border-4 border-gray-600 rounded-lg"></video>
+    <!-- 常にアクティブに保つため、最小サイズではなくしっかり表示させる -->
+    <div id="camera-container" class="relative w-full max-w-sm aspect-[3/4] bg-black border-4 border-gray-600 rounded-lg overflow-hidden">
+        <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+    </div>
 
     <script>
         const video = document.getElementById('video');
         const status = document.getElementById('status');
 
-        async function startCamera() {
+        async function initCamera() {
             try {
-                // 解像度指定を最小限にし、リアカメラをidealで要求
+                // 既存のストリームがあれば停止させる
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                }
+
                 const constraints = {
                     video: {
-                        facingMode: { ideal: "environment" }
+                        facingMode: { ideal: "environment" },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
                     }
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                // ストリームをセット
                 video.srcObject = stream;
                 
-                // Android/Pixel対応：play()はPromiseを返すため確実に待機する
-                video.onloadedmetadata = async () => {
-                    try {
-                        await video.play();
-                        status.innerText = "リアカメラ起動成功！映像を表示中...";
-                    } catch (playError) {
-                        status.innerText = "再生エラー (クリックしてください)";
-                        // 自動再生がブロックされた場合の対策
-                        document.body.addEventListener('click', () => {
-                            video.play();
-                            status.innerText = "リアカメラ起動成功！";
-                        }, { once: true });
-                    }
+                // 再生を確実にするためのイベントハンドラ
+                video.onloadedmetadata = () => {
+                    video.play().then(() => {
+                        status.innerText = "リアカメラ起動中...";
+                    }).catch(err => {
+                        status.innerText = "再生エラー: " + err.message;
+                    });
                 };
             } catch (err) {
-                status.innerText = "エラー: " + err.name + " - " + err.message;
+                status.innerText = "エラー: " + err.name;
+                console.error(err);
             }
         }
 
-        window.onload = startCamera;
+        // ユーザーインタラクションで確実に起動
+        document.body.addEventListener('click', () => {
+            initCamera();
+        }, { once: true });
     </script>
 </body>
 </html>
