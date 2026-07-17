@@ -3,28 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DNAゲル撮影アプリ</title>
+    <title>DNAゲル撮影プロトタイプ</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+
+    <h1 class="text-xl font-bold mb-4">DNAゲル撮影カメラ</h1>
+    <div id="status" class="mb-4 text-yellow-400 font-bold p-2 bg-gray-800 rounded">画面をタップしてカメラ起動</div>
     
-    <h1 class="text-xl font-bold mb-2">DNAゲル撮影カメラ</h1>
-    <div id="status" class="mb-4 text-yellow-400 font-bold">画面をタップしてカメラ起動</div>
-    
-    <!-- 常にアクティブに保つため、最小サイズではなくしっかり表示させる -->
-    <div id="camera-container" class="relative w-full max-w-sm aspect-[3/4] bg-black border-4 border-gray-600 rounded-lg overflow-hidden">
+    <!-- 映像表示用のビデオ要素 -->
+    <div class="relative w-full max-w-sm aspect-[3/4] bg-black border-4 border-gray-600 rounded-lg overflow-hidden">
         <video id="video" autoplay playsinline muted class="w-full h-full object-cover"></video>
     </div>
 
     <script>
         const video = document.getElementById('video');
         const status = document.getElementById('status');
+        let currentStream = null;
 
         async function initCamera() {
             try {
-                // 既存のストリームがあれば停止させる
-                if (video.srcObject) {
-                    video.srcObject.getTracks().forEach(track => track.stop());
+                status.innerText = "カメラ準備中...";
+
+                // ストリームを一旦クリーンアップ
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
                 }
 
                 const constraints = {
@@ -36,23 +39,21 @@
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                currentStream = stream; // 参照を保持してガベージコレクションを防ぐ
                 video.srcObject = stream;
                 
-                // 再生を確実にするためのイベントハンドラ
-                video.onloadedmetadata = () => {
-                    video.play().then(() => {
-                        status.innerText = "リアカメラ起動中...";
-                    }).catch(err => {
-                        status.innerText = "再生エラー: " + err.message;
-                    });
-                };
+                await video.play();
+                status.innerText = "リアカメラ起動成功！";
+                status.classList.replace('text-yellow-400', 'text-green-400');
+
             } catch (err) {
-                status.innerText = "エラー: " + err.name;
                 console.error(err);
+                status.innerText = "エラー: " + err.name;
+                status.classList.replace('text-yellow-400', 'text-red-400');
             }
         }
 
-        // ユーザーインタラクションで確実に起動
+        // ユーザー操作による初回起動
         document.body.addEventListener('click', () => {
             initCamera();
         }, { once: true });
