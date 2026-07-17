@@ -9,11 +9,10 @@
 <body class="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
     
     <h1 class="text-lg font-bold mb-4">リアカメラ起動テスト</h1>
-    
     <div id="status" class="mb-4 text-yellow-400 font-bold">起動準備中...</div>
     
     <!-- 映像表示用のvideo要素 -->
-    <video id="video" autoplay playsinline class="w-full max-w-md bg-black border-4 border-gray-600 rounded-lg"></video>
+    <video id="video" autoplay playsinline muted class="w-full max-w-md bg-black border-4 border-gray-600 rounded-lg"></video>
 
     <script>
         const video = document.getElementById('video');
@@ -21,33 +20,34 @@
 
         async function startCamera() {
             try {
-                // 制限を緩和したカメラ要求
-                // exactを外し、idealでリアカメラを指定
+                // 解像度指定を最小限にし、リアカメラをidealで要求
                 const constraints = {
                     video: {
-                        facingMode: { ideal: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        facingMode: { ideal: "environment" }
                     }
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
+                // ストリームをセット
                 video.srcObject = stream;
-                status.innerText = "カメラ起動成功！映像を待機中...";
-
-                // 再生処理
-                video.onloadedmetadata = () => {
-                    video.play().then(() => {
-                        status.innerText = "リアカメラ起動成功！";
-                    }).catch(e => {
-                        status.innerText = "再生エラー: " + e.message;
-                    });
+                
+                // Android/Pixel対応：play()はPromiseを返すため確実に待機する
+                video.onloadedmetadata = async () => {
+                    try {
+                        await video.play();
+                        status.innerText = "リアカメラ起動成功！映像を表示中...";
+                    } catch (playError) {
+                        status.innerText = "再生エラー (クリックしてください)";
+                        // 自動再生がブロックされた場合の対策
+                        document.body.addEventListener('click', () => {
+                            video.play();
+                            status.innerText = "リアカメラ起動成功！";
+                        }, { once: true });
+                    }
                 };
             } catch (err) {
-                // OverconstrainedErrorなどが発生した際のフォールバック
                 status.innerText = "エラー: " + err.name + " - " + err.message;
-                console.error(err);
             }
         }
 
