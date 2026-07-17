@@ -14,7 +14,7 @@
         カメラを起動する
     </button>
 
-    <div id="error-msg" class="mt-4 text-red-600 font-bold"></div>
+    <div id="error-msg" class="mt-4 text-red-600 font-bold p-2 bg-white rounded border border-red-200"></div>
     
     <video id="video" autoplay playsinline class="w-full max-w-md mt-6 border-4 border-white rounded-lg shadow-xl bg-black"></video>
 
@@ -24,16 +24,18 @@
         const errorMsg = document.getElementById('error-msg');
 
         btn.onclick = async () => {
-            errorMsg.innerText = "";
+            errorMsg.innerText = "起動中...";
             try {
-                // 最もシンプルな指定方法
+                // 最も互換性の高い設定に変更
+                // facingModeを指定せず、ブラウザにカメラ選択を委ねる
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
+                    video: true 
                 });
                 video.srcObject = stream;
+                errorMsg.innerText = "カメラ起動成功！";
             } catch (err) {
-                // エラーの詳細を表示して原因を特定しやすくする
-                errorMsg.innerText = "エラー発生: " + err.name + " (" + err.message + ")";
+                // エラーの詳細を表示
+                errorMsg.innerText = "エラー: " + err.name + " (" + err.message + ")";
                 console.error(err);
             }
         };
