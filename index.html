@@ -8,10 +8,10 @@
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
     
-    <h1 class="text-xl font-bold mb-4">カメラ起動テスト</h1>
+    <h1 class="text-xl font-bold mb-4">リアカメラ起動テスト</h1>
     
     <button id="start-btn" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-lg hover:bg-blue-700 transition">
-        カメラを起動する
+        リアカメラで起動する
     </button>
 
     <div id="error-msg" class="mt-4 text-red-600 font-bold p-2 bg-white rounded border border-red-200"></div>
@@ -26,15 +26,23 @@
         btn.onclick = async () => {
             errorMsg.innerText = "起動中...";
             try {
-                // 最も互換性の高い設定に変更
-                // facingModeを指定せず、ブラウザにカメラ選択を委ねる
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: true 
-                });
+                // リアカメラを最優先で指定
+                const constraints = {
+                    video: { facingMode: { exact: "environment" } }
+                };
+
+                // もし exact で失敗した時のために、フォールバック（環境指定なし）を用意
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (e) {
+                    console.warn("exact指定失敗、通常モードで再試行", e);
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                }
+                
                 video.srcObject = stream;
-                errorMsg.innerText = "カメラ起動成功！";
+                errorMsg.innerText = "リアカメラ起動成功！";
             } catch (err) {
-                // エラーの詳細を表示
                 errorMsg.innerText = "エラー: " + err.name + " (" + err.message + ")";
                 console.error(err);
             }
