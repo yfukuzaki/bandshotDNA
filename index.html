@@ -3,52 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ゲル撮影専用アプリ</title>
+    <title>ゲル撮影・解析統合ガイド</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body { background: #1a1a1a; color: #fff; font-family: sans-serif; }
-    </style>
+    <script async src="https://docs.opencv.org/4.7.0/opencv.js" onload="onOpenCvReady();" onerror="onOpenCvError();"></script>
 </head>
-<body class="p-4 flex flex-col items-center">
+<body class="bg-slate-900 text-white min-h-screen p-4 flex flex-col items-center">
 
-    <h1 class="text-xl font-bold mb-4">ゲル撮影アプリ</h1>
-    
-    <!-- ガイド枠を表示するコンテナ -->
-    <div id="captureArea" class="border-4 border-dashed border-green-500 w-full max-w-sm aspect-square flex flex-col items-center justify-center mb-6 bg-black/50">
-        <p id="status" class="text-green-400">真上から撮影してください</p>
-        <img id="preview" class="hidden w-full h-full object-contain" alt="撮影プレビュー">
+    <h1 class="text-xl font-bold mb-6">ゲル撮影・解析アプリ</h1>
+
+    <div id="statusIndicator" class="bg-slate-800 p-3 rounded-lg text-yellow-400 mb-6 text-sm border border-slate-700">
+        OpenCVを読み込んでいます...
     </div>
 
-    <!-- カメラ起動ボタン -->
-    <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
-    <button id="captureBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-full font-bold shadow-lg">
-        カメラを起動して撮影
-    </button>
+    <!-- 撮影機能エリア -->
+    <div class="w-full max-w-sm mb-6">
+        <label for="cameraInput" class="block w-full bg-blue-600 hover:bg-blue-700 text-white text-center py-4 rounded-xl font-bold cursor-pointer transition">
+            1. ゲルを撮影する
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden">
+        </label>
+    </div>
+
+    <!-- プレビューエリア -->
+    <div id="previewContainer" class="hidden w-full max-w-sm aspect-square bg-black border border-gray-600 rounded-lg overflow-hidden mb-6 flex items-center justify-center">
+        <img id="previewImage" class="w-full h-full object-contain" alt="撮影されたゲル画像">
+    </div>
+
+    <!-- 解析エリア -->
+    <div id="actionArea" class="hidden w-full max-w-sm">
+        <button id="analyzeButton" class="w-full bg-gray-500 text-gray-300 px-8 py-4 rounded-xl font-bold shadow-lg transition" disabled>
+            2. 画像を解析する
+        </button>
+    </div>
 
     <script>
+        let cvReady = false;
         const cameraInput = document.getElementById('cameraInput');
-        const captureBtn = document.getElementById('captureBtn');
-        const preview = document.getElementById('preview');
-        const status = document.getElementById('status');
+        const previewImage = document.getElementById('previewImage');
+        const previewContainer = document.getElementById('previewContainer');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const actionArea = document.getElementById('actionArea');
 
-        // ボタンクリックでファイル入力（カメラ）を誘発
-        captureBtn.addEventListener('click', () => {
-            cameraInput.click();
+        // OpenCVの読み込み完了ハンドラ
+        function onOpenCvReady() {
+            cvReady = true;
+            statusIndicator.innerText = "準備完了：撮影を行ってください";
+            statusIndicator.classList.remove('text-yellow-400');
+            statusIndicator.classList.add('text-green-400');
+        }
+
+        function onOpenCvError() {
+            statusIndicator.innerText = "エラー：OpenCVの読み込みに失敗しました";
+            statusIndicator.classList.add('text-red-400');
+        }
+
+        // カメラ撮影後の処理
+        cameraInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = URL.createObjectURL(file);
+                previewImage.src = url;
+                previewContainer.classList.remove('hidden');
+                actionArea.classList.remove('hidden');
+                
+                if (cvReady) {
+                    analyzeButton.disabled = false;
+                    analyzeButton.classList.remove('bg-gray-500', 'text-gray-300');
+                    analyzeButton.classList.add('bg-green-600', 'hover:bg-green-700', 'text-white');
+                    statusIndicator.innerText = "画像が読み込まれました。解析可能です。";
+                }
+            }
         });
 
-        // 撮影完了時の処理
-        cameraInput.addEventListener('change', (event) => {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    preview.src = e.target.result;
-                    preview.classList.remove('hidden');
-                    status.classList.add('hidden');
-                    console.log("撮影成功: 画像を取得しました");
-                };
-                reader.readAsDataURL(file);
-            }
+        // 解析ボタンの処理
+        analyzeButton.addEventListener('click', () => {
+            if (!cvReady) return;
+            
+            statusIndicator.innerText = "解析中...";
+            
+            // Canvasを一時的に作成してOpenCVで読み込める形式にする
+            const canvas = document.createElement('canvas');
+            canvas.width = previewImage.naturalWidth;
+            canvas.height = previewImage.naturalHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(previewImage, 0, 0);
+            
+            // OpenCVでの処理開始
+            let src = cv.imread(canvas);
+            let dst = new cv.Mat();
+            
+            // 例：グレースケール変換（解析の第一歩）
+            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+            
+            // 結果をCanvasに描画（ここでは元の画像エリアに表示）
+            cv.imshow(canvas, dst);
+            previewImage.src = canvas.toDataURL(); // 解析結果をプレビューに反映
+            
+            statusIndicator.innerText = "解析完了！";
+            
+            // メモリ解放
+            src.delete();
+            dst.delete();
         });
     </script>
 </body>
