@@ -75,7 +75,7 @@
         </button>
         <button id="tab-analysis" onclick="switchTab('analysis')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-chart-line text-emerald-400"></i>
-            <span>3. 自動解析</span>
+            <span>3. レーン抽出・高度自動解析</span>
         </button>
         <button id="tab-report" onclick="switchTab('report')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-file-export"></i>
@@ -209,33 +209,33 @@
             <!-- Step 3 Panel -->
             <div id="panel-analysis" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
-                    <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. 自動解析
+                    <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. レーン抽出・高度自動解析
                 </h2>
 
                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2.5 text-xs">
                     <!-- Display Mode Switch Toggle -->
                     <div class="flex justify-between items-center bg-gray-900 p-2 rounded-lg border border-gray-800">
-                        <span class="text-gray-300 font-medium"><i class="fa-solid fa-eye text-emerald-400 mr-1.5"></i>バンドの情報</span>
+                        <span class="text-gray-300 font-medium"><i class="fa-solid fa-eye text-emerald-400 mr-1.5"></i>画像上の情報表示</span>
                         <div class="flex space-x-1 bg-gray-950 p-1 rounded-md border border-gray-800">
-                            <button id="btn-show-bp" onclick="setDisplayMode('bp')" class="px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow">塩基長</button>
-                            <button id="btn-show-both" onclick="setDisplayMode('both')" class="px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200">DNA(ng)</button>
+                            <button id="btn-show-bp" onclick="setDisplayMode('bp')" class="px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow">bpのみ</button>
+                            <button id="btn-show-both" onclick="setDisplayMode('both')" class="px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200">bp + ng</button>
                         </div>
                     </div>
 
                     <div class="flex justify-between items-center text-gray-300 pt-1">
-                        <span><i class="fa-solid fa-ruler-vertical mr-1 text-emerald-400"></i>ウェル位置 (泳動起点)</span>
+                        <span><i class="fa-solid fa-ruler-vertical mr-1 text-emerald-400"></i>ウェル位置 (泳動起点 Y)</span>
                         <span id="val-well-y" class="text-emerald-400 font-bold">10%</span>
                     </div>
                     <input type="range" id="slider-well-y" min="2" max="30" value="10" oninput="updateAnalysisParams()" class="w-full accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
 
                     <div class="flex justify-between items-center text-gray-300 pt-1">
-                        <span><i class="fa-solid fa-grip-lines-vertical mr-1 text-blue-400"></i>レーン数</span>
+                        <span><i class="fa-solid fa-grip-lines-vertical mr-1 text-blue-400"></i>レーン分割数</span>
                         <span id="val-lane-count" class="text-blue-400 font-bold">6</span>
                     </div>
                     <input type="range" id="slider-lane-count" min="2" max="12" value="6" oninput="updateAnalysisParams()" class="w-full accent-blue-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
 
                     <div class="flex justify-between items-center text-gray-300 pt-1">
-                        <span><i class="fa-solid fa-sliders mr-1 text-amber-400"></i>バンド検出感度 (Peak Sensitivity)</span>
+                        <span><i class="fa-solid fa-sliders mr-1 text-amber-400"></i>バンド感度 (Peak Sensitivity)</span>
                         <span id="val-band-sens" class="text-amber-400 font-bold">25</span>
                     </div>
                     <input type="range" id="slider-band-sens" min="15" max="85" value="25" oninput="updateAnalysisParams()" class="w-full accent-amber-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
@@ -244,7 +244,7 @@
                 <div id="ladder-status-box" class="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl flex items-center space-x-3">
                     <i class="fa-solid fa-award text-emerald-400 text-2xl"></i>
                     <div class="text-xs">
-                        <div id="ladder-status-title" class="font-bold text-emerald-300">マーカー完全同定成功</div>
+                        <div id="ladder-status-title" class="font-bold text-emerald-300">マーカー12本完全同定成功</div>
                         <div id="ladder-status-desc" class="text-gray-300 text-[11px] leading-tight mt-0.5">
                             全12本のバンド（1500bp〜100bp）を「ナカライ 100bp DNA Ladder One」に完全バインドしました。
                         </div>
@@ -253,8 +253,8 @@
 
                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2">
                     <div class="flex justify-between items-center text-xs">
-                        <span class="font-semibold text-gray-300"><i class="fa-solid fa-chart-line text-emerald-400 mr-1"></i>検量線</span>
-                        <span class="text-[10px] text-emerald-400 font-mono font-bold">R² = 1.00</span>
+                        <span class="font-semibold text-gray-300"><i class="fa-solid fa-chart-line text-emerald-400 mr-1"></i>単調3次スプライン検量線 ($\log_{10}\text{bp} - Rf$)</span>
+                        <span class="text-[10px] text-emerald-400 font-mono font-bold">R² = 1.0000</span>
                     </div>
                     <div class="h-36 w-full">
                         <canvas id="calibrationChart"></canvas>
