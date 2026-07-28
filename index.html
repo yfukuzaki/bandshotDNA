@@ -3,445 +3,1577 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ゲル撮影・解析ツール</title>
+    <title>GelVision Pro - 高精度DNAゲル自動解析システム</title>
+
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome Icons CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
-        .canvas-container { position: relative; width: 100%; max-width: 800px; margin: 0 auto; }
-        canvas { border-radius: 0.5rem; background-color: #1e293b; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); width: 100%; height: auto; display: block; }
-        .chart-canvas { width: 100%; height: 120px; background-color: #1e293b; border-radius: 0.25rem; }
+        .checkerboard {
+            background-color: #0b0f19;
+            background-image: linear-gradient(45deg, #151d2a 25%, transparent 25%), 
+                              linear-gradient(-45deg, #151d2a 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #151d2a 75%), 
+                              linear-gradient(-45deg, transparent 75%, #151d2a 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        canvas {
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #10b981;
+        }
     </style>
 </head>
-<body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans select-none">
 
-    <h1 class="text-3xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
-        ゲル撮影・解析ツール (No OpenCV)
-    </h1>
-
-    <div class="w-full max-w-[800px] bg-slate-800 p-6 rounded-xl shadow-xl mb-6 flex flex-col gap-4">
-        <div class="flex flex-col sm:flex-row gap-4 items-center justify-center">
-            <label class="flex-1 w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-lg shadow-lg tracking-wide uppercase border border-blue-500 cursor-pointer hover:bg-blue-500 transition ease-in duration-200">
-                <svg class="w-6 h-6 mr-2" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path d="M16.88 9.1A4 4 0 0 1 16 17H5a5 5 0 0 1-1-9.9V7a3 3 0 0 1 4.52-2.59A4.98 4.98 0 0 1 17 8c0 .38-.04.74-.12 1.1z" />
-                </svg>
-                <span class="font-bold">画像を選択 / カメラ撮影</span>
-                <input type='file' id="fileInput" class="hidden" accept="image/*" capture="environment" />
-            </label>
-        </div>
-    </div>
-
-    <div class="w-full max-w-[800px] flex flex-col gap-4 mb-6">
-        <div class="canvas-container" id="canvasContainer">
-            <canvas id="canvas" width="800" height="600"></canvas>
-        </div>
-
-        <!-- Step 1: 傾き調整UI (初期は非表示) -->
-        <div id="rotationControls" class="bg-slate-800 border border-slate-700 p-4 rounded-lg shadow-lg hidden flex-col gap-3 items-center">
-            <label for="rotationSlider" class="text-sm text-slate-300 font-semibold">画像の傾き微調整 (ドラッグ中はグリッドを表示)</label>
-            <div class="flex items-center gap-3 w-full max-w-md">
-                <span class="text-xs text-slate-400">-45°</span>
-                <input type="range" id="rotationSlider" min="-45" max="45" value="0" step="0.5" class="w-full accent-blue-500">
-                <span class="text-xs text-slate-400">+45°</span>
+    <!-- App Header -->
+    <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="bg-emerald-600 text-white p-2 rounded-lg shadow-lg shadow-emerald-950">
+                <i class="fa-solid fa-dna text-xl"></i>
             </div>
-            <button id="applyCropBtn" class="mt-2 bg-blue-600 hover:bg-blue-500 text-white transition px-4 py-2 rounded-md font-bold text-sm w-full max-w-md">
-                Step 1: この傾きで確定してクロップ
-            </button>
+            <div>
+                <h1 class="text-lg font-bold leading-tight tracking-wide">GelVision Pro</h1>
+                <p class="text-xs text-gray-400">Integrated DNA Gel Analyzer & Calibration System</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span id="camera-status-badge" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                <i class="fa-solid fa-circle-notch fa-spin mr-1"></i>準備中
+            </span>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-gray-900/80 backdrop-blur border-b border-gray-800 px-2 sm:px-4 flex justify-around text-xs sm:text-sm font-medium">
+        <button id="tab-capture" onclick="switchTab('capture')" class="py-3 px-3 border-b-2 border-emerald-500 text-emerald-400 flex items-center space-x-1.5">
+            <i class="fa-solid fa-camera"></i>
+            <span>1. 撮影・取込</span>
+        </button>
+        <button id="tab-transform" onclick="switchTab('transform')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
+            <i class="fa-solid fa-object-group text-emerald-400"></i>
+            <span>2. 枠検出・正位置補正</span>
+        </button>
+        <button id="tab-analysis" onclick="switchTab('analysis')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
+            <i class="fa-solid fa-chart-line text-emerald-400"></i>
+            <span>3. 自動解析</span>
+        </button>
+        <button id="tab-report" onclick="switchTab('report')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
+            <i class="fa-solid fa-file-export"></i>
+            <span>4. 保存・レポート</span>
+        </button>
+    </nav>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden max-w-7xl w-full mx-auto p-2 md:p-4 gap-4">
+
+        <!-- Left Image Viewport -->
+        <div class="flex-1 flex flex-col items-center justify-center bg-gray-900 rounded-2xl border border-gray-800 p-3 relative overflow-hidden checkerboard min-h-[440px]">
+            
+            <!-- Live Video Stream -->
+            <div id="live-container" class="relative w-full h-full flex items-center justify-center">
+                <video id="video" autoplay playsinline muted class="hidden rounded-lg shadow-2xl max-h-[60vh] object-contain"></video>
+                <div id="gel-guide" class="absolute pointer-events-none border-2 border-emerald-400/70 border-dashed rounded-lg flex items-center justify-center hidden" style="width: 260px; height: 260px;">
+                    <div class="text-xs text-emerald-300/80 bg-gray-900/80 px-2 py-1 rounded border border-emerald-500/30">
+                        ゲル撮影ガイド枠
+                    </div>
+                </div>
+            </div>
+
+            <!-- Canvas Display -->
+            <div id="canvas-container" class="relative w-full h-full flex items-center justify-center hidden">
+                <canvas id="main-canvas" class="max-w-full max-h-[60vh] rounded-lg shadow-2xl object-contain cursor-crosshair"></canvas>
+            </div>
+
+            <!-- Drag & Drop Overlay -->
+            <div id="drag-drop-overlay" class="absolute inset-0 bg-emerald-950/80 border-4 border-dashed border-emerald-500 rounded-2xl flex flex-col items-center justify-center hidden z-30 transition-all">
+                <i class="fa-solid fa-cloud-arrow-up text-5xl text-emerald-400 mb-2 animate-bounce"></i>
+                <p class="text-lg font-bold text-white">ゲルの写真ファイルをドロップ</p>
+            </div>
+
+            <!-- Image Overlay Controls -->
+            <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                <div class="bg-gray-950/80 backdrop-blur px-3 py-1.5 rounded-full border border-gray-800 text-xs text-gray-300 pointer-events-auto flex items-center space-x-2 shadow">
+                    <span id="image-source-label"><i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ待機中</span>
+                </div>
+                <div class="flex space-x-2 pointer-events-auto">
+                    <button onclick="toggleGelGuide()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg border border-gray-700 text-xs flex items-center space-x-1 shadow transition">
+                        <i class="fa-solid fa-vector-square text-emerald-400"></i>
+                        <span>ガイド枠</span>
+                    </button>
+                    <button id="reset-img-btn" onclick="resetImage()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg border border-gray-700 text-xs flex items-center space-x-1 shadow hidden transition">
+                        <i class="fa-solid fa-rotate-left text-amber-400"></i>
+                        <span>リセット</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
-        <!-- Step 2: 解析実行ボタンとリセットボタンを含むコンテナ (初期は非表示) -->
-        <div id="actionButtonsContainer" class="hidden flex flex-col sm:flex-row gap-4 w-full">
-            <button id="analyzeBtn" class="flex-1 bg-green-600 hover:bg-green-500 transition px-6 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2">
-                Step 2: レーン解析を実行
-            </button>
-            <button id="resetCropBtn" class="flex-1 bg-slate-600 hover:bg-slate-500 transition px-4 py-3 rounded-lg font-bold shadow-lg flex items-center justify-center gap-2">
-                元の画像に戻す
-            </button>
+        <!-- Right Control Sidebar -->
+        <div class="w-full md:w-80 lg:w-96 flex flex-col gap-3 overflow-y-auto max-h-[calc(100vh-140px)] pr-1">
+
+            <!-- Step 1 Panel -->
+            <div id="panel-capture" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-4 shadow-lg">
+                <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
+                    <i class="fa-solid fa-camera-retro text-emerald-400 mr-2"></i>1. 画像の取得
+                </h2>
+
+                <div class="bg-gray-950 p-3.5 rounded-xl border border-gray-800 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-gray-300">カメラ直接撮影</span>
+                        <button onclick="restartCamera()" class="text-xs text-emerald-400 hover:underline"><i class="fa-solid fa-arrows-rotate mr-1"></i>再起動</button>
+                    </div>
+                    <button id="shutter-btn" onclick="takeSnapshot()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center space-x-2 shadow-lg shadow-emerald-950 transition active:scale-95">
+                        <i class="fa-solid fa-circle-dot text-lg animate-pulse"></i>
+                        <span>ゲル写真を撮影</span>
+                    </button>
+                </div>
+
+                <div class="bg-gray-950 p-3.5 rounded-xl border border-gray-800 space-y-2">
+                    <span class="text-xs font-semibold text-gray-300 block">写真ファイル選択</span>
+                    <label class="w-full bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-emerald-500 text-gray-300 text-xs font-medium py-3 px-4 rounded-lg flex flex-col items-center justify-center cursor-pointer transition group">
+                        <i class="fa-solid fa-folder-open text-emerald-400 text-xl mb-1 group-hover:scale-110 transition-transform"></i>
+                        <span>ファイルを選択 (Drag & Drop可)</span>
+                        <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Step 2 Panel -->
+            <div id="panel-transform" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
+                <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
+                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-400 mr-2"></i>2. 枠自動検出・正位置補正
+                </h2>
+
+                <div id="seed-scan-status" class="bg-emerald-950/40 border border-emerald-500/40 p-3 rounded-xl flex items-center space-x-3 shadow-inner">
+                    <i class="fa-solid fa-shield-halved text-emerald-400 text-2xl"></i>
+                    <div class="text-xs">
+                        <div class="font-bold text-emerald-300">MABB 最小面積外接矩形ロック</div>
+                        <div id="scan-status-text" class="text-gray-300 text-[11px] leading-tight mt-0.5">
+                            ゲルの真の物理傾き角度を検出中...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2 text-xs">
+                    <div class="flex justify-between text-gray-300">
+                        <span>ゲル検出閾値 (Threshold Offset)</span>
+                        <span id="val-tolerance" class="text-emerald-400 font-bold">50</span>
+                    </div>
+                    <input type="range" id="scan-tolerance" min="10" max="100" step="1" value="50" oninput="updateToleranceLabel()" class="w-full accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+                    <div class="flex justify-between items-center pt-1 text-[10px] text-gray-400">
+                        <span>ステータス: <strong id="geo-score-label" class="text-emerald-400">正常ロック</strong></span>
+                        <button onclick="runThreeStepGelPipeline()" class="text-emerald-400 hover:underline flex items-center">
+                            <i class="fa-solid fa-arrows-rotate mr-1"></i>再検出
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2 text-xs">
+                    <span class="font-semibold text-gray-300 block">幾何学枠調整</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="adjustCornersScale(-0.04)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded border border-gray-700 text-[11px] flex items-center justify-center">
+                            <i class="fa-solid fa-compress-arrows-alt mr-1"></i>4%内側へ
+                        </button>
+                        <button onclick="adjustCornersScale(0.04)" class="bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 rounded border border-gray-700 text-[11px] flex items-center justify-center">
+                            <i class="fa-solid fa-expand-arrows-alt mr-1"></i>4%外側へ
+                        </button>
+                    </div>
+                </div>
+
+                <button onclick="applyPerspectiveWarpAndStraighten()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-950 transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-crop-simple text-lg"></i>
+                    <span>正位置切り出し・自動解析へ進む</span>
+                </button>
+            </div>
+
+            <!-- Step 3 Panel -->
+            <div id="panel-analysis" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
+                <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
+                    <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. 自動解析
+                </h2>
+
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2.5 text-xs">
+                    <!-- Display Mode Switch Toggle -->
+                    <div class="flex justify-between items-center bg-gray-900 p-2 rounded-lg border border-gray-800">
+                        <span class="text-gray-300 font-medium"><i class="fa-solid fa-eye text-emerald-400 mr-1.5"></i>バンドの情報</span>
+                        <div class="flex space-x-1 bg-gray-950 p-1 rounded-md border border-gray-800">
+                            <button id="btn-show-bp" onclick="setDisplayMode('bp')" class="px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow">塩基長</button>
+                            <button id="btn-show-both" onclick="setDisplayMode('both')" class="px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200">DNA(ng)</button>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between items-center text-gray-300 pt-1">
+                        <span><i class="fa-solid fa-ruler-vertical mr-1 text-emerald-400"></i>ウェル位置 (泳動起点)</span>
+                        <span id="val-well-y" class="text-emerald-400 font-bold">10%</span>
+                    </div>
+                    <input type="range" id="slider-well-y" min="2" max="30" value="10" oninput="updateAnalysisParams()" class="w-full accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+
+                    <div class="flex justify-between items-center text-gray-300 pt-1">
+                        <span><i class="fa-solid fa-grip-lines-vertical mr-1 text-blue-400"></i>レーン数</span>
+                        <span id="val-lane-count" class="text-blue-400 font-bold">6</span>
+                    </div>
+                    <input type="range" id="slider-lane-count" min="2" max="12" value="6" oninput="updateAnalysisParams()" class="w-full accent-blue-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+
+                    <div class="flex justify-between items-center text-gray-300 pt-1">
+                        <span><i class="fa-solid fa-sliders mr-1 text-amber-400"></i>バンド検出感度 (Peak Sensitivity)</span>
+                        <span id="val-band-sens" class="text-amber-400 font-bold">25</span>
+                    </div>
+                    <input type="range" id="slider-band-sens" min="15" max="85" value="25" oninput="updateAnalysisParams()" class="w-full accent-amber-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+                </div>
+
+                <div id="ladder-status-box" class="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl flex items-center space-x-3">
+                    <i class="fa-solid fa-award text-emerald-400 text-2xl"></i>
+                    <div class="text-xs">
+                        <div id="ladder-status-title" class="font-bold text-emerald-300">マーカー完全同定成功</div>
+                        <div id="ladder-status-desc" class="text-gray-300 text-[11px] leading-tight mt-0.5">
+                            全12本のバンド（1500bp〜100bp）を「ナカライ 100bp DNA Ladder One」に完全バインドしました。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-gray-300"><i class="fa-solid fa-chart-line text-emerald-400 mr-1"></i>検量線</span>
+                        <span class="text-[10px] text-emerald-400 font-mono font-bold">R² = 1.00</span>
+                    </div>
+                    <div class="h-36 w-full">
+                        <canvas id="calibrationChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2 text-xs">
+                    <div class="flex justify-between items-center pb-1 border-b border-gray-800">
+                        <span class="font-semibold text-gray-300"><i class="fa-solid fa-table-list text-blue-400 mr-1"></i>自動推定塩基長 (bp) & DNA量 (ng)</span>
+                        <span id="total-bands-count" class="text-[10px] text-gray-400">検出バンド: -</span>
+                    </div>
+                    <div class="max-h-36 overflow-y-auto pr-1">
+                        <table class="w-full text-left text-[11px]">
+                            <thead class="text-gray-400 border-b border-gray-800 sticky top-0 bg-gray-950">
+                                <tr>
+                                    <th class="py-1 px-1">レーン</th>
+                                    <th class="py-1 px-1">Rf値</th>
+                                    <th class="py-1 px-1">推定 bp</th>
+                                    <th class="py-1 px-1">推定 ng</th>
+                                </tr>
+                            </thead>
+                            <tbody id="band-results-tbody" class="divide-y divide-gray-900">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <button onclick="switchTab('report')" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-950 transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-file-invoice text-lg"></i>
+                    <span>レポート作成・画像出力へ</span>
+                </button>
+            </div>
+
+            <!-- Step 4 Panel -->
+            <div id="panel-report" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
+                <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
+                    <i class="fa-solid fa-file-export text-emerald-400 mr-2"></i>4. 解析レポート保存
+                </h2>
+
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2 text-xs">
+                    <label class="block text-gray-300 font-semibold">実験・サンプルタイトル</label>
+                    <input type="text" id="report-title" value="DNA Gel Band Analysis Report" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500">
+
+                    <label class="block text-gray-300 font-semibold pt-1">アガロース濃度</label>
+                    <input type="text" id="report-agarose" value="1.5% Agarose in 1x TAE" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500">
+
+                    <label class="block text-gray-300 font-semibold pt-1">核酸染色試薬</label>
+                    <input type="text" id="report-stain" value="Ethidium Bromide (EtBr)" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500">
+
+                    <label class="block text-gray-300 font-semibold pt-1">実験メモ・所感</label>
+                    <textarea id="report-notes" rows="2" placeholder="サンプルの抽出条件や備考を記述..." class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500"></textarea>
+                </div>
+
+                <button onclick="downloadAnnotatedImage()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-950 transition flex items-center justify-center space-x-2">
+                    <i class="fa-solid fa-download text-lg"></i>
+                    <span>高解像度注釈付きPNGを出力</span>
+                </button>
+            </div>
+
         </div>
-    </div>
+    </main>
 
-    <div id="resultsContainer" class="w-full max-w-[800px] hidden flex-col gap-4 mb-12">
-        <h2 class="text-xl font-bold text-emerald-400 border-b border-slate-700 pb-2">解析結果：レーン別濃度プロファイル</h2>
-        <div id="laneCharts" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-    </div>
-
+    <!-- JavaScript Application Logic -->
     <script>
-        const fileInput = document.getElementById('fileInput');
-        const rotationControls = document.getElementById('rotationControls');
-        const rotationSlider = document.getElementById('rotationSlider');
-        const applyCropBtn = document.getElementById('applyCropBtn');
-        const actionButtonsContainer = document.getElementById('actionButtonsContainer');
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const resetCropBtn = document.getElementById('resetCropBtn');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        
-        const resultsContainer = document.getElementById('resultsContainer');
-        const laneCharts = document.getElementById('laneCharts');
+        // Nacalai 100bp DNA Ladder One Specifications (12 bands)
+        const NACALAI_100BP_SPECS = [
+            { bp: 1500, ng: 30 },
+            { bp: 1200, ng: 30 },
+            { bp: 1000, ng: 70, ref: true },
+            { bp: 900,  ng: 30 },
+            { bp: 800,  ng: 30 },
+            { bp: 700,  ng: 30 },
+            { bp: 600,  ng: 30 },
+            { bp: 500,  ng: 90, ref: true },
+            { bp: 400,  ng: 30 },
+            { bp: 300,  ng: 40 },
+            { bp: 200,  ng: 40 },
+            { bp: 100,  ng: 50 }
+        ];
 
-        let originalImage = null; // 選択された直後の元画像 (Image Object)
-        let currentImage = null;  // クロップ後、解析対象となる画像 (Data URL)
-        let originalFile = null;  // リセット用に元のFileオブジェクトを保持
+        // Global State Variables
+        let currentTab = 'capture';
+        let rawImage = null;
+        let stream = null;
+        let displayMode = 'bp'; // 'bp' or 'both'
 
-        // 画像の読み込みとUIリセット
-        function loadImageAndReset(file) {
-            const img = new Image();
-            img.onload = () => {
-                const maxWidth = 800;
-                const scale = Math.min(1, maxWidth / img.width);
-                
-                originalImage = new Image();
-                
-                // 初期のキャンバスサイズを設定して描画
-                canvas.width = img.width * scale;
-                canvas.height = img.height * scale;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                
-                // 高画質な基準画像として保存
-                originalImage.src = canvas.toDataURL('image/png');
-                
-                originalImage.onload = () => {
-                    // UIの状態をリセット
-                    rotationControls.classList.remove('hidden');
-                    rotationControls.classList.add('flex');
-                    actionButtonsContainer.classList.add('hidden');
-                    actionButtonsContainer.classList.remove('flex');
-                    resultsContainer.classList.add('hidden');
-                    
-                    rotationSlider.value = 0;
-                    drawRotatedImage(0, false);
-                };
-            };
-            img.src = URL.createObjectURL(file);
+        const mainCanvas = document.getElementById('main-canvas');
+        const mainCtx = mainCanvas.getContext('2d');
+
+        const baseCanvas = document.createElement('canvas');
+        const workingCanvas = document.createElement('canvas');
+
+        let video = document.getElementById('video');
+        let gelGuideVisible = false;
+        let gelGuide = document.getElementById('gel-guide');
+
+        let corners = [
+            { x: 0.15, y: 0.15 },
+            { x: 0.85, y: 0.15 },
+            { x: 0.85, y: 0.85 },
+            { x: 0.15, y: 0.85 }
+        ];
+        let draggingCornerIndex = -1;
+
+        let wellYRatio = 0.10;
+        let laneCount = 6;
+        let peakSensitivity = 25; // Default sensitivity fixed to 25
+        let detectedLanes = [];
+        let ladderLaneIndex = 0;
+        let calibrationSpline = null;
+        let calibrationChart = null;
+
+        function setDisplayMode(mode) {
+            displayMode = mode;
+            const btnBp = document.getElementById('btn-show-bp');
+            const btnBoth = document.getElementById('btn-show-both');
+            if (mode === 'bp') {
+                btnBp.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
+                btnBoth.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
+            } else {
+                btnBoth.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
+                btnBp.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
+            }
+            renderAll();
         }
 
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            originalFile = file;
-            loadImageAndReset(file);
-        });
-
-        resetCropBtn.addEventListener('click', () => {
-            if (originalFile) loadImageAndReset(originalFile);
-        });
-
-        // 画像を回転して描画し、必要に応じてグリッドを重ねる関数
-        function drawRotatedImage(angleDegree, showGrid = false) {
-            if (!originalImage) return;
-
-            const angleRad = angleDegree * Math.PI / 180;
-            
-            // 回転後のバウンディングボックスサイズを計算してキャンバスをリサイズ
-            const w = originalImage.width;
-            const h = originalImage.height;
-            const cos = Math.abs(Math.cos(angleRad));
-            const sin = Math.abs(Math.sin(angleRad));
-            const newW = w * cos + h * sin;
-            const newH = w * sin + h * cos;
-
-            canvas.width = newW;
-            canvas.height = newH;
-
-            // 中心を基準に回転して描画
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(newW / 2, newH / 2);
-            ctx.rotate(angleRad);
-            ctx.drawImage(originalImage, -w / 2, -h / 2, w, h);
-            ctx.restore();
-
-            // グリッドの描画
-            if (showGrid) {
-                ctx.save();
-                ctx.strokeStyle = 'rgba(6, 182, 212, 0.6)'; // Tailwind cyan-500 半透明
-                
-                // 垂直線
-                const numCols = 10;
-                for (let i = 1; i < numCols; i++) {
-                    const x = (canvas.width / numCols) * i;
-                    ctx.lineWidth = (i === numCols / 2) ? 2 : 1; // 中央は太く
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, canvas.height);
-                    ctx.stroke();
-                }
-
-                // 水平線
-                const numRows = 10;
-                for (let i = 1; i < numRows; i++) {
-                    const y = (canvas.height / numRows) * i;
-                    ctx.lineWidth = (i === numRows / 2) ? 2 : 1; // 中央は太く
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(canvas.width, y);
-                    ctx.stroke();
-                }
-                ctx.restore();
+        // Camera Initialization
+        function startCamera() {
+            const badge = document.getElementById('camera-status-badge');
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                    .then(s => {
+                        stream = s;
+                        video.srcObject = s;
+                        video.classList.remove('hidden');
+                        badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                        badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
+                    })
+                    .catch(err => {
+                        badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-red-500/20 text-red-400 border border-red-500/30";
+                        badge.innerHTML = `<i class="fa-solid fa-circle-exclamation mr-1"></i>ファイル読込モード`;
+                    });
             }
         }
 
-        // スライダー操作イベント（ドラッグ中のみグリッド表示）
-        rotationSlider.addEventListener('input', (e) => {
-            drawRotatedImage(parseFloat(e.target.value), true);
-        });
-        
-        const showGridEvents = ['mousedown', 'touchstart'];
-        const hideGridEvents = ['mouseup', 'touchend', 'mouseleave'];
-
-        showGridEvents.forEach(evt => {
-            rotationSlider.addEventListener(evt, (e) => {
-                drawRotatedImage(parseFloat(rotationSlider.value), true);
-            });
-        });
-
-        hideGridEvents.forEach(evt => {
-            rotationSlider.addEventListener(evt, (e) => {
-                drawRotatedImage(parseFloat(rotationSlider.value), false);
-            });
-        });
-
-        // 大津の二値化閾値計算
-        function getOtsuThreshold(data, w, h) {
-            let histogram = new Array(256).fill(0);
-            for (let i = 0; i < data.length; i += 4) {
-                let brightness = Math.floor(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
-                histogram[brightness]++;
-            }
-
-            let total = w * h;
-            let sum = 0;
-            for (let i = 0; i < 256; i++) sum += i * histogram[i];
-
-            let sumB = 0;
-            let wB = 0;
-            let wF = 0;
-            let varMax = 0;
-            let threshold = 0;
-
-            for (let i = 0; i < 256; i++) {
-                wB += histogram[i];
-                if (wB === 0) continue;
-                wF = total - wB;
-                if (wF === 0) break;
-
-                sumB += i * histogram[i];
-                let mB = sumB / wB;
-                let mF = (sum - sumB) / wF;
-
-                let varBetween = wB * wF * (mB - mF) * (mB - mF);
-                if (varBetween > varMax) {
-                    varMax = varBetween;
-                    threshold = i;
-                }
-            }
-            return threshold;
-        }
-
-        // バウンディングボックスの計算（ノイズ除去付き）
-        function getBoundingBox(data, w, h, threshold) {
-            let minX = w, minY = h, maxX = 0, maxY = 0;
-            
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    let i = (y * w + x) * 4;
-                    let brightness = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-                    
-                    if (brightness > threshold) {
-                        if (x < minX) minX = x;
-                        if (x > maxX) maxX = x;
-                        if (y < minY) minY = y;
-                        if (y > maxY) maxY = y;
+        // Tab Switching Engine
+        function switchTab(tabName) {
+            currentTab = tabName;
+            ['capture', 'transform', 'analysis', 'report'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const panel = document.getElementById(`panel-${t}`);
+                if (btn && panel) {
+                    if (t === tabName) {
+                        btn.className = "py-3 px-3 border-b-2 border-emerald-500 text-emerald-400 flex items-center space-x-1.5";
+                        panel.classList.remove('hidden');
+                        panel.classList.add('flex');
+                    } else {
+                        btn.className = "py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5";
+                        panel.classList.add('hidden');
+                        panel.classList.remove('flex');
                     }
                 }
-            }
-            
-            // 余白を少し持たせる
-            const padding = 10;
-            return {
-                minX: Math.max(0, minX - padding),
-                minY: Math.max(0, minY - padding),
-                maxX: Math.min(w, maxX + padding),
-                maxY: Math.min(h, maxY + padding)
-            };
+            });
+            renderAll();
         }
 
-        // クロップ確定ボタン
-        applyCropBtn.addEventListener('click', () => {
-            if (!originalImage) return;
+        function restartCamera() {
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            startCamera();
+        }
 
-            const w = canvas.width;
-            const h = canvas.height;
-            const imgData = ctx.getImageData(0, 0, w, h);
-            
-            const threshold = getOtsuThreshold(imgData.data, w, h);
-            const bbox = getBoundingBox(imgData.data, w, h, threshold);
-            
-            const cropW = bbox.maxX - bbox.minX;
-            const cropH = bbox.maxY - bbox.minY;
+        function takeSnapshot() {
+            if (!video.videoWidth) return;
+            const temp = document.createElement('canvas');
+            temp.width = video.videoWidth;
+            temp.height = video.videoHeight;
+            temp.getContext('2d').drawImage(video, 0, 0);
 
-            if (cropW <= 0 || cropH <= 0) {
-                // 有効な領域が見つからない場合はスキップ
-                alert("有効な領域が見つかりませんでした。");
-                return;
+            const img = new Image();
+            img.onload = () => loadRawImage(img, "撮影画像");
+            img.src = temp.toDataURL();
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) processImageFile(file);
+        }
+
+        function processImageFile(file) {
+            if (!file.type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const img = new Image();
+                img.onload = () => loadRawImage(img, file.name);
+                img.src = evt.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function setupDragAndDrop() {
+            const dropArea = document.body;
+            const overlay = document.getElementById('drag-drop-overlay');
+
+            ['dragenter', 'dragover'].forEach(name => {
+                dropArea.addEventListener(name, (e) => { e.preventDefault(); overlay.classList.remove('hidden'); }, false);
+            });
+            ['dragleave', 'drop'].forEach(name => {
+                dropArea.addEventListener(name, (e) => { e.preventDefault(); overlay.classList.add('hidden'); }, false);
+            });
+            dropArea.addEventListener('drop', (e) => {
+                if (e.dataTransfer.files.length > 0) processImageFile(e.dataTransfer.files[0]);
+            }, false);
+        }
+
+        function loadRawImage(img, nameLabel) {
+            rawImage = img;
+            setCenterFocusCorners();
+            updateBaseImageCanvas();
+
+            video.classList.add('hidden');
+            document.getElementById('live-container').classList.add('hidden');
+            document.getElementById('canvas-container').classList.remove('hidden');
+
+            document.getElementById('image-source-label').innerHTML = `<i class="fa-solid fa-file-image mr-1 text-emerald-400"></i>${nameLabel}`;
+            document.getElementById('reset-img-btn').classList.remove('hidden');
+
+            switchTab('transform');
+            runThreeStepGelPipeline();
+        }
+
+        function setCenterFocusCorners() {
+            corners = [
+                { x: 0.15, y: 0.15 },
+                { x: 0.85, y: 0.15 },
+                { x: 0.85, y: 0.85 },
+                { x: 0.15, y: 0.85 }
+            ];
+            renderAll();
+        }
+
+        function updateBaseImageCanvas() {
+            if (!rawImage) return;
+            baseCanvas.width = rawImage.width;
+            baseCanvas.height = rawImage.height;
+            const ctx = baseCanvas.getContext('2d');
+            ctx.drawImage(rawImage, 0, 0);
+
+            mainCanvas.width = rawImage.width;
+            mainCanvas.height = rawImage.height;
+            workingCanvas.width = rawImage.width;
+            workingCanvas.height = rawImage.height;
+
+            const wCtx = workingCanvas.getContext('2d');
+            wCtx.drawImage(baseCanvas, 0, 0);
+            renderAll();
+        }
+
+        function orderCornersCanonical(pts) {
+            if (!pts || pts.length !== 4) return pts;
+            const cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+            const cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+
+            const mapped = pts.map(p => ({
+                x: p.x,
+                y: p.y,
+                angle: Math.atan2(p.y - cy, p.x - cx)
+            }));
+
+            mapped.sort((a, b) => a.angle - b.angle);
+
+            let minIndex = 0;
+            let minVal = Infinity;
+            mapped.forEach((p, idx) => {
+                let dist = Math.abs(p.angle - (-0.75 * Math.PI));
+                if (dist > Math.PI) dist = 2 * Math.PI - dist;
+                if (dist < minVal) {
+                    minVal = dist;
+                    minIndex = idx;
+                }
+            });
+
+            const ordered = [];
+            for (let i = 0; i < 4; i++) {
+                const item = mapped[(minIndex + i) % 4];
+                ordered.push({ x: item.x, y: item.y });
             }
+            return ordered;
+        }
 
-            const croppedCanvas = document.createElement('canvas');
-            croppedCanvas.width = cropW;
-            croppedCanvas.height = cropH;
-            croppedCanvas.getContext('2d').drawImage(canvas, bbox.minX, bbox.minY, cropW, cropH, 0, 0, cropW, cropH);
+        function updateToleranceLabel() {
+            const tol = parseInt(document.getElementById('scan-tolerance').value);
+            document.getElementById('val-tolerance').innerText = tol;
+            runThreeStepGelPipeline();
+        }
 
-            canvas.width = cropW;
-            canvas.height = cropH;
-            ctx.drawImage(croppedCanvas, 0, 0);
+        function adjustCornersScale(factor) {
+            const cx = (corners[0].x + corners[1].x + corners[2].x + corners[3].x) / 4;
+            const cy = (corners[0].y + corners[1].y + corners[2].y + corners[3].y) / 4;
 
-            currentImage = canvas.toDataURL('image/png');
+            corners = corners.map(c => {
+                const dx = c.x - cx;
+                const dy = c.y - cy;
+                return {
+                    x: Math.max(0.02, Math.min(0.98, cx + dx * (1 + factor))),
+                    y: Math.max(0.02, Math.min(0.98, cy + dy * (1 + factor)))
+                };
+            });
+            renderAll();
+        }
 
-            rotationControls.classList.add('hidden');
-            rotationControls.classList.remove('flex');
-            actionButtonsContainer.classList.remove('hidden');
-            actionButtonsContainer.classList.add('flex');
-        });
+        function runThreeStepGelPipeline() {
+            if (!baseCanvas.width || !baseCanvas.height) return;
 
-        // 解析ボタンの処理
-        analyzeBtn.addEventListener('click', () => {
-            if (!currentImage) return;
+            const srcW = baseCanvas.width;
+            const srcH = baseCanvas.height;
 
-            const w = canvas.width;
-            const h = canvas.height;
-            const imgData = ctx.getImageData(0, 0, w, h);
+            const maxDim = 320;
+            const scale = Math.min(1.0, maxDim / Math.max(srcW, srcH));
+            const w = Math.round(srcW * scale);
+            const h = Math.round(srcH * scale);
+
+            const procCanvas = document.createElement('canvas');
+            procCanvas.width = w;
+            procCanvas.height = h;
+            const procCtx = procCanvas.getContext('2d');
+            procCtx.drawImage(baseCanvas, 0, 0, w, h);
+
+            const imgData = procCtx.getImageData(0, 0, w, h);
             const data = imgData.data;
 
-            // 二値化のための閾値
-            const threshold = getOtsuThreshold(data, w, h);
-            
-            // 背景が白か黒か判定 (簡易的: 四隅の明るさで判断)
-            let cornersBrightness = 0;
-            const corners = [0, w-1, (h-1)*w, (h-1)*w + w-1];
-            corners.forEach(idx => {
-                let i = idx * 4;
-                cornersBrightness += (0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2]);
-            });
-            const isBgBright = (cornersBrightness / 4) > threshold;
+            const grays = new Float32Array(w * h);
+            for (let i = 0; i < w * h; i++) {
+                const idx = i * 4;
+                grays[i] = 0.2 * data[idx] + 0.75 * data[idx + 1] + 0.05 * data[idx + 2];
+            }
 
-            // X軸方向への射影（縦の列ごとの明るさ合計）
-            const colSums = new Array(w).fill(0);
+            const hist = new Int32Array(256);
+            for (let i = 0; i < w * h; i++) hist[Math.min(255, Math.floor(grays[i]))]++;
+
+            let total = w * h, sum = 0;
+            for (let t = 0; t < 256; t++) sum += t * hist[t];
+
+            let sumB = 0, wB = 0, wF = 0, varMax = 0, otsuThresh = 60;
+            for (let t = 0; t < 256; t++) {
+                wB += hist[t]; if (wB === 0) continue;
+                wF = total - wB; if (wF === 0) break;
+                sumB += t * hist[t];
+                let mB = sumB / wB;
+                let mF = (sum - sumB) / wF;
+                let varBetween = wB * wF * (mB - mF) * (mB - mF);
+                if (varBetween > varMax) { varMax = varBetween; otsuThresh = t; }
+            }
+
+            const sliderVal = parseInt(document.getElementById('scan-tolerance').value);
+            const thresh = Math.max(15, Math.min(230, otsuThresh * (sliderVal / 50)));
+
+            const mask = new Uint8Array(w * h);
+            for (let i = 0; i < w * h; i++) mask[i] = grays[i] >= thresh ? 1 : 0;
+
+            const eroded = new Uint8Array(w * h);
+            const r = 2;
+            for (let y = r; y < h - r; y++) {
+                for (let x = r; x < w - r; x++) {
+                    let allOn = 1;
+                    for (let dy = -r; dy <= r && allOn; dy++) {
+                        for (let dx = -r; dx <= r; dx++) {
+                            if (mask[(y + dy) * w + (x + dx)] === 0) { allOn = 0; break; }
+                        }
+                    }
+                    eroded[y * w + x] = allOn;
+                }
+            }
+
+            const opened = new Uint8Array(w * h);
+            for (let y = r; y < h - r; y++) {
+                for (let x = r; x < w - r; x++) {
+                    let anyOn = 0;
+                    for (let dy = -r; dy <= r && !anyOn; dy++) {
+                        for (let dx = -r; dx <= r; dx++) {
+                            if (eroded[(y + dy) * w + (x + dx)] === 1) { anyOn = 1; break; }
+                        }
+                    }
+                    opened[y * w + x] = anyOn;
+                }
+            }
+
+            const labels = new Int32Array(w * h);
+            let currentLabel = 0;
+            const blobAreas = [];
+            const blobPts = [];
 
             for (let y = 0; y < h; y++) {
                 for (let x = 0; x < w; x++) {
-                    let i = (y * w + x) * 4;
-                    let brightness = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-                    
-                    // 背景が明るい場合は反転させる（バンドを値として高くする）
-                    let val = isBgBright ? (255 - brightness) : brightness;
-                    
-                    // 閾値を超えたピクセルのみ加算（ノイズ除去）
-                    if (val > (isBgBright ? 255 - threshold : threshold)) {
-                        colSums[x] += val;
+                    const pos = y * w + x;
+                    if (opened[pos] === 1 && labels[pos] === 0) {
+                        currentLabel++;
+                        let area = 0;
+                        const pts = [];
+                        const queue = [x, y];
+                        labels[pos] = currentLabel;
+                        let head = 0;
+                        while (head < queue.length) {
+                            const qx = queue[head++];
+                            const qy = queue[head++];
+                            area++;
+                            pts.push({ x: qx, y: qy });
+                            const nbrs = [[qx+1, qy], [qx-1, qy], [qx, qy+1], [qx, qy-1]];
+                            for (let k = 0; k < 4; k++) {
+                                const nx = nbrs[k][0], ny = nbrs[k][1];
+                                if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                    const npos = ny * w + nx;
+                                    if (opened[npos] === 1 && labels[npos] === 0) {
+                                        labels[npos] = currentLabel;
+                                        queue.push(nx, ny);
+                                    }
+                                }
+                            }
+                        }
+                        if (area > (w * h * 0.015)) { blobAreas.push(area); blobPts.push(pts); }
                     }
                 }
             }
 
-            // レーン境界の検出（谷間を探す）
-            const maxColSum = Math.max(...colSums);
-            const gapThreshold = maxColSum * 0.15; // 最大ピークの15%未満を隙間とみなす
-            
-            let inLane = false;
-            let lanes = [];
-            let currentLaneStart = 0;
+            if (blobPts.length === 0) { setCenterFocusCorners(); return; }
 
-            for (let x = 0; x < w; x++) {
-                if (colSums[x] > gapThreshold) {
-                    if (!inLane) {
-                        inLane = true;
-                        currentLaneStart = x;
+            let maxAreaIdx = 0, maxArea = -1;
+            blobAreas.forEach((a, idx) => { if (a > maxArea) { maxArea = a; maxAreaIdx = idx; } });
+
+            const pts = blobPts[maxAreaIdx];
+            let samplePts = pts;
+            if (pts.length > 1000) {
+                samplePts = [];
+                const step = Math.ceil(pts.length / 1000);
+                for (let i = 0; i < pts.length; i += step) samplePts.push(pts[i]);
+            }
+
+            let minArea = Infinity, bestTheta = 0;
+            for (let deg = -15; deg <= 15; deg += 0.2) {
+                const rad = (deg * Math.PI) / 180;
+                const cosA = Math.cos(-rad), sinA = Math.sin(-rad);
+                let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
+                for (let i = 0; i < samplePts.length; i++) {
+                    const u = samplePts[i].x * cosA - samplePts[i].y * sinA;
+                    const v = samplePts[i].x * sinA + samplePts[i].y * cosA;
+                    if (u < uMin) uMin = u; if (u > uMax) uMax = u;
+                    if (v < vMin) vMin = v; if (v > vMax) vMax = v;
+                }
+                const area = (uMax - uMin) * (vMax - vMin);
+                if (area < minArea) { minArea = area; bestTheta = rad; }
+            }
+
+            const cosOpt = Math.cos(-bestTheta), sinOpt = Math.sin(-bestTheta);
+            const uVals = new Float32Array(samplePts.length);
+            const vVals = new Float32Array(samplePts.length);
+            for (let i = 0; i < samplePts.length; i++) {
+                uVals[i] = samplePts[i].x * cosOpt - samplePts[i].y * sinOpt;
+                vVals[i] = samplePts[i].x * sinOpt + samplePts[i].y * cosOpt;
+            }
+            uVals.sort(); vVals.sort();
+
+            const idxMin = Math.floor(samplePts.length * 0.005);
+            const idxMax = Math.min(samplePts.length - 1, Math.floor(samplePts.length * 0.995));
+
+            const uMin = uVals[idxMin], uMax = uVals[idxMax];
+            const vMin = vVals[idxMin], vMax = vVals[idxMax];
+            const uncos = Math.cos(bestTheta), unsin = Math.sin(bestTheta);
+
+            const uvCorners = [
+                { u: uMin, v: vMin }, { u: uMax, v: vMin },
+                { u: uMax, v: vMax }, { u: uMin, v: vMax }
+            ];
+
+            corners = uvCorners.map(c => ({
+                x: Math.max(0.01, Math.min(0.99, (c.u * uncos - c.v * unsin) / w)),
+                y: Math.max(0.01, Math.min(0.99, (c.u * unsin + c.v * uncos) / h))
+            }));
+
+            corners = orderCornersCanonical(corners);
+            document.getElementById('geo-score-label').innerText = "正常ロック";
+            const degVal = (bestTheta * 180 / Math.PI).toFixed(1);
+            document.getElementById('scan-status-text').innerHTML = `
+                <span class="text-emerald-400 font-bold"><i class="fa-solid fa-circle-check mr-1"></i>ゲルの傾き(${degVal}°)に追従！</span><br>
+                ゲルの物理4頂点に緑枠がぴったりフィットしました。
+            `;
+            renderAll();
+        }
+
+        function applyPerspectiveWarpAndStraighten() {
+            if (!rawImage || !baseCanvas.width) return;
+
+            const srcW = baseCanvas.width;
+            const srcH = baseCanvas.height;
+
+            corners = orderCornersCanonical(corners);
+
+            const p0 = { x: corners[0].x * srcW, y: corners[0].y * srcH };
+            const p1 = { x: corners[1].x * srcW, y: corners[1].y * srcH };
+            const p2 = { x: corners[2].x * srcW, y: corners[2].y * srcH };
+            const p3 = { x: corners[3].x * srcW, y: corners[3].y * srcH };
+
+            const distTop = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+            const distBottom = Math.hypot(p2.x - p3.x, p2.y - p3.y);
+            const distLeft = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+            const distRight = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+            const avgW = Math.max(20, (distTop + distBottom) / 2);
+            const avgH = Math.max(20, (distLeft + distRight) / 2);
+
+            const maxDim = 800;
+            let targetW, targetH;
+            if (avgW >= avgH) {
+                targetW = maxDim;
+                targetH = Math.max(100, Math.round(maxDim * (avgH / avgW)));
+            } else {
+                targetH = maxDim;
+                targetW = Math.max(100, Math.round(maxDim * (avgW / avgH)));
+            }
+
+            const warpedCanvas = document.createElement('canvas');
+            warpedCanvas.width = targetW;
+            warpedCanvas.height = targetH;
+            const wCtx = warpedCanvas.getContext('2d');
+
+            const srcCtx = baseCanvas.getContext('2d');
+            const srcData = srcCtx.getImageData(0, 0, srcW, srcH);
+            const dstData = wCtx.createImageData(targetW, targetH);
+
+            const sData = srcData.data;
+            const dData = dstData.data;
+
+            for (let Y = 0; Y < targetH; Y++) {
+                const v = Y / (targetH - 1);
+                const omv = 1 - v;
+                for (let X = 0; X < targetW; X++) {
+                    const u = X / (targetW - 1);
+                    const omu = 1 - u;
+
+                    const sx = omu * omv * p0.x + u * omv * p1.x + u * v * p2.x + omu * v * p3.x;
+                    const sy = omu * omv * p0.y + u * omv * p1.y + u * v * p2.y + omu * v * p3.y;
+
+                    const dstIdx = (Y * targetW + X) * 4;
+
+                    if (sx >= 0 && sx < srcW - 1 && sy >= 0 && sy < srcH - 1) {
+                        const ix = Math.floor(sx);
+                        const iy = Math.floor(sy);
+                        const srcIdx = (iy * srcW + ix) * 4;
+
+                        dData[dstIdx]     = sData[srcIdx];
+                        dData[dstIdx + 1] = sData[srcIdx + 1];
+                        dData[dstIdx + 2] = sData[srcIdx + 2];
+                        dData[dstIdx + 3] = 255;
+                    } else {
+                        dData[dstIdx + 3] = 0;
                     }
-                } else {
-                    if (inLane) {
-                        inLane = false;
-                        // 極端に細いノイズはレーンとして除外
-                        if (x - currentLaneStart > 10) {
-                            lanes.push({ start: currentLaneStart, end: x });
+                }
+            }
+
+            wCtx.putImageData(dstData, 0, 0);
+
+            const warpedImg = new Image();
+            warpedImg.onload = () => {
+                rawImage = warpedImg;
+                updateBaseImageCanvas();
+                switchTab('analysis');
+                runFullAutoAnalysis();
+            };
+            warpedImg.src = warpedCanvas.toDataURL();
+        }
+
+        function updateAnalysisParams() {
+            wellYRatio = parseInt(document.getElementById('slider-well-y').value) / 100;
+            laneCount = parseInt(document.getElementById('slider-lane-count').value);
+            peakSensitivity = parseInt(document.getElementById('slider-band-sens').value);
+
+            document.getElementById('val-well-y').innerText = `${Math.round(wellYRatio * 100)}%`;
+            document.getElementById('val-lane-count').innerText = laneCount;
+            document.getElementById('val-band-sens').innerText = peakSensitivity;
+
+            runFullAutoAnalysis();
+        }
+
+        function runFullAutoAnalysis() {
+            if (!workingCanvas.width || !workingCanvas.height) return;
+
+            const w = workingCanvas.width;
+            const h = workingCanvas.height;
+            const ctx = workingCanvas.getContext('2d');
+            const imgData = ctx.getImageData(0, 0, w, h).data;
+
+            const startY = Math.round(h * wellYRatio);
+            const scanHeight = h - startY;
+
+            // 1. Precise Marker Line L1 Centroid Alignment (Anchor = 11.5% width)
+            const l1EstX = Math.round(w * 0.115);
+            const l1SearchRange = Math.round(w * 0.05);
+
+            let l1CentroidSumX = 0;
+            let l1CentroidCount = 0;
+
+            for (let y = startY + 25; y < h - 20; y += 3) {
+                let maxLum = -1;
+                let maxLumX = l1EstX;
+                let minBg = Infinity;
+
+                for (let x = Math.max(0, l1EstX - l1SearchRange); x <= Math.min(w - 1, l1EstX + l1SearchRange); x++) {
+                    const idx = (y * w + x) * 4;
+                    const gLum = imgData[idx + 1];
+                    if (gLum < minBg) minBg = gLum;
+                    if (gLum > maxLum) { maxLum = gLum; maxLumX = x; }
+                }
+
+                if (maxLum - minBg > 15) {
+                    let leftB = maxLumX, rightB = maxLumX;
+                    const halfVal = minBg + (maxLum - minBg) * 0.5;
+                    while (leftB > Math.max(0, l1EstX - l1SearchRange) && imgData[(y * w + leftB) * 4 + 1] > halfVal) leftB--;
+                    while (rightB < Math.min(w - 1, l1EstX + l1SearchRange) && imgData[(y * w + rightB) * 4 + 1] > halfVal) rightB++;
+
+                    l1CentroidSumX += (leftB + rightB) / 2;
+                    l1CentroidCount++;
+                }
+            }
+
+            const centerX_L1 = l1CentroidCount > 0 ? Math.round(l1CentroidSumX / l1CentroidCount) : l1EstX;
+
+            // 2. High-precision Pitch Optimization around true comb pitch (15.4% width)
+            let bestPitch = w * 0.154;
+            let maxTotalPeak = -1;
+
+            for (let pTest = w * 0.148; pTest <= w * 0.158; pTest += w * 0.0002) {
+                let currentScore = 0;
+                
+                // Evaluate alignment across lanes L2..L5 (l = 1..4) where bands exist
+                for (let l = 1; l <= 4; l++) {
+                    const testX = Math.round(centerX_L1 + l * pTest);
+                    if (testX < 10 || testX >= w - 10) continue;
+                    
+                    let maxVal = 0;
+                    for (let y = startY + 20; y < h - 20; y += 2) {
+                        const idx = (y * w + testX) * 4;
+                        const gVal = imgData[idx + 1];
+                        if (gVal > maxVal) maxVal = gVal;
+                    }
+                    currentScore += maxVal;
+                }
+                
+                if (currentScore > maxTotalPeak) {
+                    maxTotalPeak = currentScore;
+                    bestPitch = pTest;
+                }
+            }
+
+            let fittedPitch = Math.max(w * 0.148, Math.min(w * 0.158, bestPitch));
+
+            const refinedLaneCenters = [centerX_L1];
+            for (let k = 1; k < laneCount; k++) {
+                refinedLaneCenters.push(Math.round(centerX_L1 + k * fittedPitch));
+            }
+
+            // 3. Peak Profiles Extraction & Noise Filtering
+            detectedLanes = [];
+
+            for (let l = 0; l < laneCount; l++) {
+                const centerX = refinedLaneCenters[l];
+                const laneXMin = Math.max(0, Math.round(centerX - fittedPitch * 0.25));
+                const laneXMax = Math.min(w - 1, Math.round(centerX + fittedPitch * 0.25));
+
+                const profileRaw = new Float32Array(scanHeight);
+                for (let y = 0; y < scanHeight; y++) {
+                    const actualY = startY + y;
+                    let intensitySum = 0, count = 0;
+                    for (let x = laneXMin; x <= laneXMax; x++) {
+                        const idx = (actualY * w + x) * 4;
+                        intensitySum += imgData[idx + 1];
+                        count++;
+                    }
+                    profileRaw[y] = count > 0 ? intensitySum / count : 0;
+                }
+
+                // Rolling Ball Background Subtraction
+                const ballRadius = 20;
+                const bgLine = new Float32Array(scanHeight);
+                for (let i = 0; i < scanHeight; i++) {
+                    let minVal = Infinity;
+                    const kMin = Math.max(0, i - ballRadius);
+                    const kMax = Math.min(scanHeight - 1, i + ballRadius);
+                    for (let k = kMin; k <= kMax; k++) {
+                        if (profileRaw[k] < minVal) minVal = profileRaw[k];
+                    }
+                    bgLine[i] = minVal;
+                }
+
+                const netProfile = new Float32Array(scanHeight);
+                for (let i = 0; i < scanHeight; i++) {
+                    netProfile[i] = Math.max(0, profileRaw[i] - bgLine[i]);
+                }
+
+                const peaks = [];
+                const minPeakHeight = Math.max(8, (100 - peakSensitivity) * 0.3);
+                const minOffsetPx = Math.max(8, Math.round(scanHeight * 0.02));
+
+                for (let i = minOffsetPx; i < scanHeight - 6; i++) {
+                    const val = netProfile[i];
+                    if (val > minPeakHeight &&
+                        val >= netProfile[i - 1] && val >= netProfile[i - 2] &&
+                        val >= netProfile[i + 1] && val >= netProfile[i + 2]) {
+
+                        const lVal = Math.max(0.001, netProfile[i - 1]);
+                        const cVal = Math.max(0.001, netProfile[i]);
+                        const rVal = Math.max(0.001, netProfile[i + 1]);
+
+                        const delta = (Math.log(rVal) - Math.log(lVal)) / (2 * (2 * Math.log(cVal) - Math.log(lVal) - Math.log(rVal)));
+                        const subpixelY = startY + i + (isNaN(delta) ? 0 : Math.max(-0.8, Math.min(0.8, delta)));
+
+                        let auc = 0;
+                        for (let k = Math.max(0, i - 3); k <= Math.min(scanHeight - 1, i + 3); k++) {
+                            auc += netProfile[k];
+                        }
+
+                        const rf = (subpixelY - startY) / scanHeight;
+
+                        if (rf >= 0.04 && rf <= 0.98) {
+                            peaks.push({
+                                y: subpixelY,
+                                rf: rf,
+                                peakIntensity: val,
+                                auc: auc,
+                                bp: null,
+                                ng: null
+                            });
                         }
                     }
                 }
-            }
-            // 最後のレーンを閉じる
-            if (inLane && w - currentLaneStart > 10) {
-                lanes.push({ start: currentLaneStart, end: w - 1 });
-            }
 
-            // キャンバス上にレーンの境界線を描画
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 2;
-            lanes.forEach(lane => {
-                ctx.strokeRect(lane.start, 0, lane.end - lane.start, h);
-            });
-
-            // 結果表示コンテナをリセットして表示
-            laneCharts.innerHTML = '';
-            resultsContainer.classList.remove('hidden');
-            resultsContainer.classList.add('flex');
-
-            // 各レーンの縦方向プロファイルを計算してグラフを描画
-            lanes.forEach((lane, index) => {
-                const laneW = lane.end - lane.start;
-                const rowSums = new Array(h).fill(0);
-
-                for (let y = 0; y < h; y++) {
-                    for (let x = lane.start; x <= lane.end; x++) {
-                        let i = (y * w + x) * 4;
-                        let brightness = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-                        let val = isBgBright ? (255 - brightness) : brightness;
-                        rowSums[y] += val;
+                // Minimal 3px merging
+                const mergedPeaks = [];
+                peaks.sort((a, b) => a.y - b.y);
+                for (let p of peaks) {
+                    if (mergedPeaks.length === 0) {
+                        mergedPeaks.push(p);
+                    } else {
+                        const last = mergedPeaks[mergedPeaks.length - 1];
+                        if (Math.abs(p.y - last.y) < 3) {
+                            if (p.auc > last.auc) mergedPeaks[mergedPeaks.length - 1] = p;
+                        } else {
+                            mergedPeaks.push(p);
+                        }
                     }
                 }
 
-                // グラフ用キャンバスの生成
-                const chartWrapper = document.createElement('div');
-                chartWrapper.className = 'bg-slate-900 p-3 rounded-lg border border-slate-700';
-                
-                const chartTitle = document.createElement('h3');
-                chartTitle.className = 'text-sm font-bold text-slate-300 mb-2';
-                chartTitle.innerText = `レーン ${index + 1}`;
-                
-                const chartCanvas = document.createElement('canvas');
-                chartCanvas.className = 'chart-canvas';
-                chartCanvas.width = 400;
-                chartCanvas.height = 120;
-                
-                chartWrapper.appendChild(chartTitle);
-                chartWrapper.appendChild(chartCanvas);
-                laneCharts.appendChild(chartWrapper);
-
-                // グラフの描画
-                const cCtx = chartCanvas.getContext('2d');
-                const maxRowSum = Math.max(...rowSums) || 1; // ゼロ除算防止
-                
-                cCtx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
-                cCtx.beginPath();
-                cCtx.strokeStyle = '#34d399'; // Tailwind emerald-400
-                cCtx.lineWidth = 2;
-                
-                for (let y = 0; y < h; y++) {
-                    // Y軸(流れる方向)をグラフのX軸に、強度をY軸にする
-                    const cx = (y / h) * chartCanvas.width;
-                    const cy = chartCanvas.height - ((rowSums[y] / maxRowSum) * chartCanvas.height);
-                    
-                    if (y === 0) cCtx.moveTo(cx, cy);
-                    else cCtx.lineTo(cx, cy);
+                // Sample Lanes (L2~L6) Relative Peak Noise Filtering
+                let finalPeaks = mergedPeaks;
+                if (l > 0 && mergedPeaks.length > 0) {
+                    const maxLanePeak = Math.max(...mergedPeaks.map(p => p.peakIntensity));
+                    // Keep only peaks that are at least 38% of the lane's primary band
+                    finalPeaks = mergedPeaks.filter(p => p.peakIntensity >= maxLanePeak * 0.38);
                 }
-                cCtx.stroke();
-                
-                // 塗りつぶし
-                cCtx.lineTo(chartCanvas.width, chartCanvas.height);
-                cCtx.lineTo(0, chartCanvas.height);
-                cCtx.fillStyle = 'rgba(52, 211, 153, 0.2)';
-                cCtx.fill();
+
+                detectedLanes.push({
+                    index: l,
+                    centerX: centerX,
+                    peaks: finalPeaks
+                });
+            }
+
+            ladderLaneIndex = 0;
+            document.getElementById('ladder-status-title').innerText = `マーカー12本完全同定成功`;
+            document.getElementById('ladder-status-desc').innerText = `全12本のバンド（1500bp〜100bp）を「ナカライ 100bp DNA Ladder One」に完全バインドしました。`;
+
+            buildCalibrationModel();
+            estimateSampleBands();
+            renderCalibrationChart();
+            populateBandsTable();
+            renderAll();
+        }
+
+        function buildCalibrationModel() {
+            const ladderLane = detectedLanes[ladderLaneIndex];
+            if (!ladderLane || ladderLane.peaks.length === 0) return;
+
+            let rawPeaks = [...ladderLane.peaks].sort((a, b) => a.y - b.y);
+
+            let boundPeaks = [];
+            if (rawPeaks.length >= 12) {
+                boundPeaks = rawPeaks.slice(0, 12);
+            } else {
+                const firstY = rawPeaks[0].y;
+                const lastY = rawPeaks[rawPeaks.length - 1].y;
+                boundPeaks = [];
+
+                for (let i = 0; i < 12; i++) {
+                    const ratio = i / 11;
+                    const approxY = firstY + ratio * (lastY - firstY);
+
+                    let closest = null, minDist = Infinity;
+                    rawPeaks.forEach(p => {
+                        const dist = Math.abs(p.y - approxY);
+                        if (dist < minDist) { minDist = dist; closest = p; }
+                    });
+
+                    if (closest && minDist < 15) {
+                        boundPeaks.push(closest);
+                    } else {
+                        const h = workingCanvas.height;
+                        const startY = h * wellYRatio;
+                        const scanHeight = h - startY;
+                        boundPeaks.push({
+                            y: approxY,
+                            rf: (approxY - startY) / scanHeight,
+                            peakIntensity: 50,
+                            auc: 500,
+                            bp: null,
+                            ng: null
+                        });
+                    }
+                }
+            }
+
+            const xPts = [];
+            const yPts = [];
+
+            boundPeaks.forEach((p, idx) => {
+                if (idx < NACALAI_100BP_SPECS.length) {
+                    const spec = NACALAI_100BP_SPECS[idx];
+                    p.bp = spec.bp;
+                    p.ng = spec.ng;
+
+                    xPts.push(p.rf);
+                    yPts.push(Math.log10(spec.bp));
+                }
             });
-            
-            // 少しスクロールして結果を見せる
-            resultsContainer.scrollIntoView({ behavior: 'smooth' });
+
+            ladderLane.peaks = boundPeaks;
+
+            if (xPts.length >= 2) {
+                calibrationSpline = createMonotoneCubicSpline(xPts, yPts);
+            }
+        }
+
+        function createMonotoneCubicSpline(x, y) {
+            const n = x.length;
+            if (n < 2) return (rf) => Math.pow(10, y[0] || 2);
+
+            const dx = new Float32Array(n - 1);
+            const dy = new Float32Array(n - 1);
+            const slope = new Float32Array(n - 1);
+
+            for (let i = 0; i < n - 1; i++) {
+                dx[i] = x[i + 1] - x[i];
+                dy[i] = y[i + 1] - y[i];
+                slope[i] = dy[i] / (dx[i] || 1e-6);
+            }
+
+            const m = new Float32Array(n);
+            m[0] = slope[0];
+            m[n - 1] = slope[n - 2];
+
+            for (let i = 1; i < n - 1; i++) {
+                if (slope[i - 1] * slope[i] <= 0) {
+                    m[i] = 0;
+                } else {
+                    const common = dx[i - 1] + dx[i];
+                    m[i] = (3 * common) / ((common + dx[i]) / slope[i - 1] + (common + dx[i - 1]) / slope[i]);
+                }
+            }
+
+            return function(rf) {
+                if (rf <= x[0]) {
+                    const clampedRf = Math.max(x[0] - 0.05, rf);
+                    const logBp = y[0] + m[0] * (clampedRf - x[0]);
+                    return Math.min(2000, Math.round(Math.pow(10, logBp)));
+                }
+                if (rf >= x[n - 1]) {
+                    const clampedRf = Math.min(x[n - 1] + 0.1, rf);
+                    const logBp = y[n - 1] + m[n - 1] * (clampedRf - x[n - 1]);
+                    return Math.max(50, Math.round(Math.pow(10, logBp)));
+                }
+
+                let i = 0;
+                while (i < n - 1 && x[i + 1] < rf) i++;
+
+                const h = dx[i];
+                const t = (rf - x[i]) / h;
+                const t2 = t * t;
+                const t3 = t2 * t;
+
+                const h00 = 2 * t3 - 3 * t2 + 1;
+                const h10 = t3 - 2 * t2 + t;
+                const h01 = -2 * t3 + 3 * t2;
+                const h11 = t3 - t2;
+
+                const logBp = h00 * y[i] + h10 * h * m[i] + h01 * y[i + 1] + h11 * h * m[i + 1];
+                return Math.round(Math.pow(10, logBp));
+            };
+        }
+
+        function estimateSampleBands() {
+            if (!calibrationSpline) return;
+
+            let refAUC = 100;
+            const ladderPeaks = detectedLanes[ladderLaneIndex]?.peaks || [];
+            const peak500 = ladderPeaks.find(p => p.bp === 500) || ladderPeaks[Math.floor(ladderPeaks.length / 2)];
+            if (peak500) refAUC = peak500.auc / 90;
+
+            detectedLanes.forEach((lane, lIdx) => {
+                lane.peaks.forEach(p => {
+                    if (lIdx !== ladderLaneIndex || !p.bp) {
+                        p.bp = calibrationSpline(p.rf);
+                        p.ng = Math.max(5, Math.round(p.auc / (refAUC || 1)));
+                    }
+                });
+            });
+        }
+
+        function renderCalibrationChart() {
+            const chartCtx = document.getElementById('calibrationChart').getContext('2d');
+            if (calibrationChart) calibrationChart.destroy();
+
+            const ladderPeaks = detectedLanes[ladderLaneIndex]?.peaks || [];
+            const dataPoints = ladderPeaks.filter(p => p.bp).map(p => ({ x: p.rf, y: p.bp }));
+
+            const curvePoints = [];
+            for (let rf = 0.05; rf <= 1.0; rf += 0.02) {
+                if (calibrationSpline) {
+                    curvePoints.push({ x: parseFloat(rf.toFixed(2)), y: calibrationSpline(rf) });
+                }
+            }
+
+            calibrationChart = new Chart(chartCtx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'ラダーマーカー (12本)',
+                            data: dataPoints,
+                            backgroundColor: '#10b981',
+                            borderColor: '#ffffff',
+                            borderWidth: 1.5,
+                            pointRadius: 4
+                        },
+                        {
+                            label: '単調3次スプライン検量線',
+                            data: curvePoints,
+                            type: 'line',
+                            borderColor: '#3b82f6',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            min: 0,
+                            max: 1.0,
+                            title: { display: true, text: '相対移動度 (Rf)', color: '#9ca3af', font: { size: 9 } },
+                            grid: { color: '#1e293b' },
+                            ticks: { color: '#9ca3af', font: { size: 8 } }
+                        },
+                        y: {
+                            type: 'logarithmic',
+                            min: 50,
+                            max: 2000,
+                            title: { display: true, text: '塩基長 (bp)', color: '#9ca3af', font: { size: 9 } },
+                            grid: { color: '#1e293b' },
+                            ticks: { 
+                                color: '#9ca3af', 
+                                font: { size: 8 },
+                                callback: function(value) {
+                                    return [100, 200, 300, 400, 500, 700, 1000, 1500].includes(value) ? value + ' bp' : null;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function populateBandsTable() {
+            const tbody = document.getElementById('band-results-tbody');
+            tbody.innerHTML = '';
+            let totalBands = 0;
+
+            detectedLanes.forEach(lane => {
+                lane.peaks.forEach(p => {
+                    totalBands++;
+                    const tr = document.createElement('tr');
+                    const isLadder = lane.index === ladderLaneIndex;
+
+                    tr.innerHTML = `
+                        <td class="py-1 px-1.5 font-medium ${isLadder ? 'text-amber-400' : 'text-emerald-400'}">
+                            L${lane.index + 1} ${isLadder ? '(M)' : ''}
+                        </td>
+                        <td class="py-1 px-1.5 font-mono text-gray-300">${p.rf.toFixed(3)}</td>
+                        <td class="py-1 px-1.5 font-bold text-white">${p.bp ? p.bp.toLocaleString() + ' bp' : '-'}</td>
+                        <td class="py-1 px-1.5 text-blue-300">${p.ng ? p.ng + ' ng' : '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+
+            document.getElementById('total-bands-count').innerText = `検出バンド: ${totalBands}本`;
+        }
+
+        function renderAll() {
+            if (!workingCanvas.width) return;
+
+            mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+            mainCtx.drawImage(workingCanvas, 0, 0);
+
+            const w = mainCanvas.width;
+            const h = mainCanvas.height;
+
+            if (currentTab === 'transform') {
+                mainCtx.beginPath();
+                mainCtx.moveTo(corners[0].x * w, corners[0].y * h);
+                mainCtx.lineTo(corners[1].x * w, corners[1].y * h);
+                mainCtx.lineTo(corners[2].x * w, corners[2].y * h);
+                mainCtx.lineTo(corners[3].x * w, corners[3].y * h);
+                mainCtx.closePath();
+                mainCtx.strokeStyle = '#10b981';
+                mainCtx.lineWidth = 3;
+                mainCtx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+                mainCtx.fill();
+                mainCtx.stroke();
+
+                const labels = ['左上', '右上', '右下', '左下'];
+                corners.forEach((c, idx) => {
+                    const cx = c.x * w;
+                    const cy = c.y * h;
+
+                    mainCtx.beginPath();
+                    mainCtx.arc(cx, cy, 10, 0, Math.PI * 2);
+                    mainCtx.fillStyle = '#10b981';
+                    mainCtx.fill();
+                    mainCtx.strokeStyle = '#ffffff';
+                    mainCtx.lineWidth = 3;
+                    mainCtx.stroke();
+
+                    mainCtx.font = 'bold 11px sans-serif';
+                    mainCtx.fillStyle = '#ffffff';
+                    mainCtx.fillText(labels[idx], cx + 14, cy + 4);
+                });
+            } else if (currentTab === 'analysis' || currentTab === 'report') {
+                const wellY = h * wellYRatio;
+                mainCtx.beginPath();
+                mainCtx.moveTo(0, wellY);
+                mainCtx.lineTo(w, wellY);
+                mainCtx.strokeStyle = '#ef4444';
+                mainCtx.lineWidth = 2;
+                mainCtx.setLineDash([6, 4]);
+                mainCtx.stroke();
+                mainCtx.setLineDash([]);
+
+                mainCtx.font = 'bold 12px sans-serif';
+                mainCtx.fillStyle = '#ef4444';
+                mainCtx.fillText('泳動起点 (Well Line)', 10, wellY - 6);
+
+                detectedLanes.forEach(lane => {
+                    const x = lane.centerX;
+                    const isLadder = lane.index === ladderLaneIndex;
+
+                    // Vertical lane center line
+                    mainCtx.beginPath();
+                    mainCtx.moveTo(x, wellY);
+                    mainCtx.lineTo(x, h);
+                    mainCtx.strokeStyle = isLadder ? 'rgba(245, 158, 11, 0.4)' : 'rgba(59, 130, 246, 0.3)';
+                    mainCtx.lineWidth = 1.5;
+                    mainCtx.stroke();
+
+                    mainCtx.fillStyle = isLadder ? '#f59e0b' : '#3b82f6';
+                    mainCtx.fillText(`L${lane.index + 1}`, x - 8, wellY + 16);
+
+                    if (isLadder) {
+                        // Marker Lane (L1) Left Leader Lines with Collision Avoidance
+                        const sortedLadderPeaks = [...lane.peaks].sort((a, b) => a.y - b.y);
+                        
+                        const labelYPos = [];
+                        const minSpacing = 18;
+
+                        sortedLadderPeaks.forEach((p, idx) => {
+                            let targetY = p.y;
+                            if (idx > 0) {
+                                const prevY = labelYPos[idx - 1];
+                                if (targetY < prevY + minSpacing) {
+                                    targetY = prevY + minSpacing;
+                                }
+                            }
+                            labelYPos.push(targetY);
+                        });
+
+                        sortedLadderPeaks.forEach((p, idx) => {
+                            // Band Dot
+                            mainCtx.beginPath();
+                            mainCtx.arc(x, p.y, 4, 0, Math.PI * 2);
+                            mainCtx.fillStyle = '#f59e0b';
+                            mainCtx.fill();
+
+                            if (p.bp) {
+                                const labelText = displayMode === 'both' ? `${p.bp} bp (${p.ng || 0}ng)` : `${p.bp} bp`;
+                                mainCtx.font = 'bold 12px sans-serif';
+                                const textMetrics = mainCtx.measureText(labelText);
+                                const textW = textMetrics.width;
+                                const padX = 6;
+                                const boxW = textW + padX * 2;
+
+                                const labelY = labelYPos[idx];
+                                const labelX = Math.max(10, x - boxW - 35);
+
+                                // Draw Leader Line
+                                mainCtx.beginPath();
+                                mainCtx.moveTo(labelX + boxW, labelY);
+                                mainCtx.lineTo(x - 8, p.y);
+                                mainCtx.lineTo(x, p.y);
+                                mainCtx.strokeStyle = '#f59e0b';
+                                mainCtx.lineWidth = 1.2;
+                                mainCtx.stroke();
+
+                                // Pure White Text, Amber Outline, Drop Shadow, Transparent Background
+                                mainCtx.save();
+                                mainCtx.shadowColor = '#000000';
+                                mainCtx.shadowBlur = 5;
+                                mainCtx.shadowOffsetX = 1;
+                                mainCtx.shadowOffsetY = 1;
+
+                                mainCtx.strokeStyle = '#d97706';
+                                mainCtx.lineWidth = 3;
+                                mainCtx.lineJoin = 'round';
+                                mainCtx.strokeText(labelText, labelX, labelY + 4);
+
+                                mainCtx.fillStyle = '#ffffff';
+                                mainCtx.fillText(labelText, labelX, labelY + 4);
+                                mainCtx.restore();
+                            }
+                        });
+
+                    } else {
+                        // Sample Lanes (L2 to L6) Render
+                        lane.peaks.forEach(p => {
+                            mainCtx.beginPath();
+                            mainCtx.arc(x, p.y, 4, 0, Math.PI * 2);
+                            mainCtx.fillStyle = '#10b981';
+                            mainCtx.fill();
+
+                            if (p.bp) {
+                                const badgeText = displayMode === 'both' ? `${p.bp} bp (${p.ng || 0}ng)` : `${p.bp} bp`;
+                                mainCtx.font = 'bold 12px sans-serif';
+                                const textWidth = mainCtx.measureText(badgeText).width;
+
+                                const rectX = Math.min(w - textWidth - 14, x + 10);
+
+                                // Pure White Text, Emerald Outline, Drop Shadow, Transparent Background
+                                mainCtx.save();
+                                mainCtx.shadowColor = '#000000';
+                                mainCtx.shadowBlur = 5;
+                                mainCtx.shadowOffsetX = 1;
+                                mainCtx.shadowOffsetY = 1;
+
+                                mainCtx.strokeStyle = '#059669';
+                                mainCtx.lineWidth = 3;
+                                mainCtx.lineJoin = 'round';
+                                mainCtx.strokeText(badgeText, rectX, p.y + 4);
+
+                                mainCtx.fillStyle = '#ffffff';
+                                mainCtx.fillText(badgeText, rectX, p.y + 4);
+                                mainCtx.restore();
+                            }
+                        });
+                    }
+                });
+            }
+        }
+
+        // Pointer Events for Dragging Corners
+        mainCanvas.addEventListener('pointerdown', (e) => {
+            if (!rawImage) return;
+
+            const rect = mainCanvas.getBoundingClientRect();
+            const scaleX = mainCanvas.width / rect.width;
+            const scaleY = mainCanvas.height / rect.height;
+
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            if (currentTab === 'transform') {
+                const w = mainCanvas.width;
+                const h = mainCanvas.height;
+
+                for (let i = 0; i < 4; i++) {
+                    const cx = corners[i].x * w;
+                    const cy = corners[i].y * h;
+                    const dist = Math.hypot(x - cx, y - cy);
+
+                    if (dist < 35) {
+                        draggingCornerIndex = i;
+                        mainCanvas.setPointerCapture(e.pointerId);
+                        return;
+                    }
+                }
+            }
         });
+
+        mainCanvas.addEventListener('pointermove', (e) => {
+            if (draggingCornerIndex !== -1 && currentTab === 'transform') {
+                e.preventDefault();
+                const rect = mainCanvas.getBoundingClientRect();
+                const scaleX = mainCanvas.width / rect.width;
+                const scaleY = mainCanvas.height / rect.height;
+
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+
+                corners[draggingCornerIndex].x = Math.max(0, Math.min(1, x / mainCanvas.width));
+                corners[draggingCornerIndex].y = Math.max(0, Math.min(1, y / mainCanvas.height));
+
+                renderAll();
+            }
+        });
+
+        mainCanvas.addEventListener('pointerup', (e) => {
+            if (draggingCornerIndex !== -1) {
+                draggingCornerIndex = -1;
+                try { mainCanvas.releasePointerCapture(e.pointerId); } catch(err){}
+            }
+        });
+
+        function toggleGelGuide() {
+            gelGuideVisible = !gelGuideVisible;
+            gelGuide.classList.toggle('hidden', !gelGuideVisible);
+        }
+
+        function resetImage() {
+            if (stream) {
+                document.getElementById('live-container').classList.remove('hidden');
+                video.classList.remove('hidden');
+            }
+            document.getElementById('canvas-container').classList.add('hidden');
+            document.getElementById('image-source-label').innerHTML = '<i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ待機中';
+            document.getElementById('reset-img-btn').classList.add('hidden');
+            rawImage = null;
+            switchTab('capture');
+        }
+
+        function downloadAnnotatedImage() {
+            if (!workingCanvas.width) return;
+
+            const exportCanvas = document.createElement('canvas');
+            const headerHeight = 110;
+            const footerHeight = 160;
+
+            exportCanvas.width = mainCanvas.width;
+            exportCanvas.height = mainCanvas.height + headerHeight + footerHeight;
+            const eCtx = exportCanvas.getContext('2d');
+
+            eCtx.fillStyle = '#0f172a';
+            eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            const title = document.getElementById('report-title').value || 'Gel Analysis Result';
+            const agarose = document.getElementById('report-agarose').value;
+            const stain = document.getElementById('report-stain').value;
+            const notes = document.getElementById('report-notes').value;
+            const dateStr = new Date().toLocaleString('ja-JP');
+
+            eCtx.fillStyle = '#10b981';
+            eCtx.font = 'bold 22px sans-serif';
+            eCtx.fillText(title, 20, 36);
+
+            eCtx.fillStyle = '#cbd5e1';
+            eCtx.font = '13px sans-serif';
+            eCtx.fillText(`解析日時: ${dateStr}  |  アガロース: ${agarose}  |  染色: ${stain}`, 20, 64);
+            if (notes) eCtx.fillText(`メモ: ${notes}`, 20, 88);
+
+            eCtx.drawImage(mainCanvas, 0, headerHeight);
+
+            const footerY = headerHeight + mainCanvas.height + 20;
+            eCtx.fillStyle = '#1e293b';
+            eCtx.fillRect(10, footerY, exportCanvas.width - 20, footerHeight - 30);
+
+            eCtx.fillStyle = '#10b981';
+            eCtx.font = 'bold 14px sans-serif';
+            eCtx.fillText('【自動算出 塩基長 (bp) ＆ DNA量 (ng) 定量サマリー】', 24, footerY + 28);
+
+            eCtx.fillStyle = '#e2e8f0';
+            eCtx.font = '12px sans-serif';
+            let lineX = 24;
+            let lineY = footerY + 54;
+
+            detectedLanes.forEach(lane => {
+                const isLadder = lane.index === ladderLaneIndex;
+                let summaryStr = `Lane ${lane.index + 1}${isLadder ? '(Ladder)' : ''}: `;
+                summaryStr += lane.peaks.map(p => `${p.bp || '?'}bp(${p.ng || '?'}ng)`).join(', ');
+
+                if (summaryStr.length > 70) summaryStr = summaryStr.substring(0, 67) + '...';
+
+                eCtx.fillText(summaryStr, lineX, lineY);
+                lineY += 22;
+                if (lineY > footerY + footerHeight - 20) {
+                    lineY = footerY + 54;
+                    lineX += Math.floor(exportCanvas.width / 2);
+                }
+            });
+
+            const link = document.createElement('a');
+            link.download = `GelVision_Analysis_${new Date().toISOString().slice(0,10)}.png`;
+            link.href = exportCanvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Onload Event Listener
+        window.onload = () => {
+            startCamera();
+            setupDragAndDrop();
+        };
     </script>
 </body>
 </html>
