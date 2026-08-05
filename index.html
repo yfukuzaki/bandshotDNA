@@ -67,19 +67,19 @@
     <nav class="bg-gray-900/80 backdrop-blur border-b border-gray-800 px-2 sm:px-4 flex justify-around text-xs sm:text-sm font-medium">
         <button id="tab-capture" onclick="switchTab('capture')" class="py-3 px-3 border-b-2 border-emerald-500 text-emerald-400 flex items-center space-x-1.5">
             <i class="fa-solid fa-camera"></i>
-            <span>1. 撮影・取込</span>
+            <span>1. 撮影</span>
         </button>
         <button id="tab-transform" onclick="switchTab('transform')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-object-group text-emerald-400"></i>
-            <span>2. 枠検出・正位置補正</span>
+            <span>2. 位置補正</span>
         </button>
         <button id="tab-analysis" onclick="switchTab('analysis')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-chart-line text-emerald-400"></i>
-            <span>3. レーン抽出・高度自動解析</span>
+            <span>3. 解析</span>
         </button>
         <button id="tab-report" onclick="switchTab('report')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-file-export"></i>
-            <span>4. 保存・レポート</span>
+            <span>4. 保存</span>
         </button>
     </nav>
 
@@ -154,7 +154,7 @@
             <!-- Step 1 Panel -->
             <div id="panel-capture" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-4 shadow-lg">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
-                    <i class="fa-solid fa-camera-retro text-emerald-400 mr-2"></i>1. 画像の取得
+                    <i class="fa-solid fa-camera-retro text-emerald-400 mr-2"></i>1. 撮影
                 </h2>
 
                 <div class="bg-gray-950 p-3.5 rounded-xl border border-gray-800 space-y-2">
@@ -181,7 +181,7 @@
             <!-- Step 2 Panel -->
             <div id="panel-transform" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
-                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-400 mr-2"></i>2. 枠自動検出・正位置補正
+                    <i class="fa-solid fa-wand-magic-sparkles text-emerald-400 mr-2"></i>2. 位置補正
                 </h2>
 
                 <div id="seed-scan-status" class="bg-emerald-950/40 border border-emerald-500/40 p-3 rounded-xl flex items-center space-x-3 shadow-inner">
@@ -229,7 +229,7 @@
             <!-- Step 3 Panel -->
             <div id="panel-analysis" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
-                    <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. レーン抽出・高度自動解析
+                    <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. 解析
                 </h2>
 
                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2.5 text-xs">
@@ -312,7 +312,7 @@
             <!-- Step 4 Panel -->
             <div id="panel-report" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
-                    <i class="fa-solid fa-file-export text-emerald-400 mr-2"></i>4. 解析レポート保存
+                    <i class="fa-solid fa-file-export text-emerald-400 mr-2"></i>4. 保存
                 </h2>
 
                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2 text-xs">
@@ -360,10 +360,10 @@
         let currentTab = 'capture';
         let rawImage = null;
         let stream = null;
-        let activeFacingMode = "environment"; // default back camera
+        let activeFacingMode = "environment";
         let availableVideoDevices = [];
         let currentDeviceIndex = 0;
-        let displayMode = 'bp'; // 'bp' or 'both'
+        let displayMode = 'bp';
 
         // Zoom State Variables
         let currentZoom = 1.0;
@@ -377,7 +377,6 @@
         const mainCanvas = document.getElementById('main-canvas');
         const mainCtx = mainCanvas.getContext('2d');
 
-        // Missing canvas elements & state declarations
         const baseCanvas = document.createElement('canvas');
         const workingCanvas = document.createElement('canvas');
 
@@ -401,7 +400,22 @@
         let calibrationSpline = null;
         let calibrationChart = null;
 
-        // Robust Camera Initialization with Multi-Stage Fallbacks & Device Enumeration
+        function setDisplayMode(mode) {
+            displayMode = mode;
+            const btnBp = document.getElementById('btn-show-bp');
+            const btnBoth = document.getElementById('btn-show-both');
+            if (btnBp && btnBoth) {
+                if (mode === 'bp') {
+                    btnBp.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
+                    btnBoth.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
+                } else {
+                    btnBoth.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
+                    btnBp.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
+                }
+            }
+            renderAll();
+        }
+
         async function startCamera() {
             const badge = document.getElementById('camera-status-badge');
             
@@ -410,12 +424,13 @@
             }
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
-                badge.innerHTML = `<i class="fa-solid fa-folder-open mr-1"></i>ファイル読込モード`;
+                if (badge) {
+                    badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
+                    badge.innerHTML = `<i class="fa-solid fa-folder-open mr-1"></i>ファイル読込モード`;
+                }
                 return;
             }
 
-            // カメラデバイス一覧の取得（マルチカメラ/超広角対応）
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 availableVideoDevices = devices.filter(d => d.kind === 'videoinput');
@@ -432,7 +447,6 @@
                 }
             };
 
-            // 特定のデバイスIDが選択されている場合
             if (availableVideoDevices.length > 0 && availableVideoDevices[currentDeviceIndex]?.deviceId) {
                 constraintsExact = {
                     audio: false,
@@ -459,22 +473,21 @@
             };
 
             try {
-                // First Attempt: Exact Constraint or Specified Device ID
                 stream = await navigator.mediaDevices.getUserMedia(constraintsExact);
                 handleCameraSuccess(stream, badge);
             } catch (err1) {
                 try {
-                    // Second Attempt: Loose Facing Mode
                     stream = await navigator.mediaDevices.getUserMedia(constraintsLoose);
                     handleCameraSuccess(stream, badge);
                 } catch (err2) {
                     try {
-                        // Third Attempt: Any Video Source
                         stream = await navigator.mediaDevices.getUserMedia(constraintsBasic);
                         handleCameraSuccess(stream, badge);
                     } catch (fallbackErr) {
-                        badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
-                        badge.innerHTML = `<i class="fa-solid fa-folder-open mr-1"></i>ファイル選択モード`;
+                        if (badge) {
+                            badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
+                            badge.innerHTML = `<i class="fa-solid fa-folder-open mr-1"></i>ファイル選択モード`;
+                        }
                     }
                 }
             }
@@ -491,18 +504,21 @@
                 checkHardwareZoomSupport();
             }
 
-            // Force play video for mobile browser auto-play policies
             video.play().then(() => {
-                badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-                badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
-                document.getElementById('image-source-label').innerHTML = `<i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ起動中`;
+                if (badge) {
+                    badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                    badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
+                }
+                const label = document.getElementById('image-source-label');
+                if (label) label.innerHTML = `<i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ起動中`;
             }).catch(e => {
-                badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-                badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
+                if (badge) {
+                    badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                    badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
+                }
             });
         }
 
-        // Camera Hardware & Digital Zoom Logic (Expanded for Wide Angle < 1.0)
         function checkHardwareZoomSupport() {
             hasHardwareZoom = false;
             minZoom = 1.0;
@@ -521,7 +537,6 @@
                 }
             }
 
-            // デジタルズームの場合、1.0未満への縮小は画角上不可のため1.0に固定
             if (!hasHardwareZoom) {
                 minZoom = 1.0;
             }
@@ -631,7 +646,6 @@
             startCamera();
         }
 
-        // Tab Switching Engine
         function switchTab(tabName) {
             currentTab = tabName;
             ['capture', 'transform', 'analysis', 'report'].forEach(t => {
@@ -664,7 +678,6 @@
             if (hasHardwareZoom || currentZoom === 1.0) {
                 ctx.drawImage(video, 0, 0, vw, vh);
             } else {
-                // Digital zoom crop center portion
                 const cropWidth = vw / currentZoom;
                 const cropHeight = vh / currentZoom;
                 const cropX = (vw - cropWidth) / 2;
@@ -973,12 +986,17 @@
             }));
 
             corners = orderCornersCanonical(corners);
-            document.getElementById('geo-score-label').innerText = "正常ロック";
-            const degVal = (bestTheta * 180 / Math.PI).toFixed(1);
-            document.getElementById('scan-status-text').innerHTML = `
-                <span class="text-emerald-400 font-bold"><i class="fa-solid fa-circle-check mr-1"></i>ゲルの傾き(${degVal}°)に追従！</span><br>
-                ゲルの物理4頂点に緑枠がぴったりフィットしました。
-            `;
+            const geoLabel = document.getElementById('geo-score-label');
+            if (geoLabel) geoLabel.innerText = "正常ロック";
+
+            const scanStatusText = document.getElementById('scan-status-text');
+            if (scanStatusText) {
+                const degVal = (bestTheta * 180 / Math.PI).toFixed(1);
+                scanStatusText.innerHTML = `
+                    <span class="text-emerald-400 font-bold"><i class="fa-solid fa-circle-check mr-1"></i>ゲルの傾き(${degVal}°)に追従！</span><br>
+                    ゲルの物理4頂点に緑枠がぴったりフィットしました。
+                `;
+            }
             renderAll();
         }
 
@@ -1069,9 +1087,13 @@
             laneCount = parseInt(document.getElementById('slider-lane-count').value);
             peakSensitivity = parseInt(document.getElementById('slider-band-sens').value);
 
-            document.getElementById('val-well-y').innerText = `${Math.round(wellYRatio * 100)}%`;
-            document.getElementById('val-lane-count').innerText = laneCount;
-            document.getElementById('val-band-sens').innerText = peakSensitivity;
+            const elWellY = document.getElementById('val-well-y');
+            const elLaneCount = document.getElementById('val-lane-count');
+            const elBandSens = document.getElementById('val-band-sens');
+
+            if (elWellY) elWellY.innerText = `${Math.round(wellYRatio * 100)}%`;
+            if (elLaneCount) elLaneCount.innerText = laneCount;
+            if (elBandSens) elBandSens.innerText = peakSensitivity;
 
             runFullAutoAnalysis();
         }
@@ -1085,9 +1107,9 @@
             const imgData = ctx.getImageData(0, 0, w, h).data;
 
             const startY = Math.round(h * wellYRatio);
-            const scanHeight = h - startY;
+            const scanHeight = Math.max(50, h - startY);
 
-            // 1. Precise Marker Line L1 Centroid Alignment (Anchor = 11.5% width)
+            // 1. Precise Marker Line L1 Centroid Alignment
             const l1EstX = Math.round(w * 0.115);
             const l1SearchRange = Math.round(w * 0.05);
 
@@ -1119,15 +1141,13 @@
 
             const centerX_L1 = l1CentroidCount > 0 ? Math.round(l1CentroidSumX / l1CentroidCount) : l1EstX;
 
-            // 2. High-precision Pitch Optimization around true comb pitch (15.4% width)
+            // 2. High-precision Pitch Optimization
             let bestPitch = w * 0.154;
             let maxTotalPeak = -1;
 
             for (let pTest = w * 0.148; pTest <= w * 0.158; pTest += w * 0.0002) {
                 let currentScore = 0;
-                
-                // Evaluate alignment across lanes L2..L5 (l = 1..4) where bands exist
-                for (let l = 1; l <= 4; l++) {
+                for (let l = 1; l <= Math.min(4, laneCount - 1); l++) {
                     const testX = Math.round(centerX_L1 + l * pTest);
                     if (testX < 10 || testX >= w - 10) continue;
                     
@@ -1146,7 +1166,7 @@
                 }
             }
 
-            let fittedPitch = Math.max(w * 0.148, Math.min(w * 0.158, bestPitch));
+            let fittedPitch = Math.max(w * 0.10, Math.min(w * 0.25, bestPitch));
 
             const refinedLaneCenters = [centerX_L1];
             for (let k = 1; k < laneCount; k++) {
@@ -1244,7 +1264,7 @@
                     }
                 }
 
-                // Sample Lanes (L2~L6) Relative Peak Noise Filtering
+                // Sample Lanes Relative Peak Noise Filtering
                 let finalPeaks = mergedPeaks;
                 if (l > 0 && mergedPeaks.length > 0) {
                     const maxLanePeak = Math.max(...mergedPeaks.map(p => p.peakIntensity));
@@ -1259,8 +1279,10 @@
             }
 
             ladderLaneIndex = 0;
-            document.getElementById('ladder-status-title').innerText = `マーカー12本完全同定成功`;
-            document.getElementById('ladder-status-desc').innerText = `全12本のバンド（1500bp〜100bp）を「ナカライ 100bp DNA Ladder One」に完全バインドしました。`;
+            const titleEl = document.getElementById('ladder-status-title');
+            const descEl = document.getElementById('ladder-status-desc');
+            if (titleEl) titleEl.innerText = `マーカー12本完全同定成功`;
+            if (descEl) descEl.innerText = `全12本のバンド（1500bp〜100bp）を「ナカライ 100bp DNA Ladder One」に完全バインドしました。`;
 
             buildCalibrationModel();
             estimateSampleBands();
@@ -1271,17 +1293,20 @@
 
         function buildCalibrationModel() {
             const ladderLane = detectedLanes[ladderLaneIndex];
-            if (!ladderLane || ladderLane.peaks.length === 0) return;
+            if (!ladderLane) return;
 
-            let rawPeaks = [...ladderLane.peaks].sort((a, b) => a.y - b.y);
+            let rawPeaks = [...(ladderLane.peaks || [])].sort((a, b) => a.y - b.y);
+
+            const h = workingCanvas.height || 600;
+            const startY = h * wellYRatio;
+            const scanHeight = Math.max(100, h - startY);
 
             let boundPeaks = [];
             if (rawPeaks.length >= 12) {
                 boundPeaks = rawPeaks.slice(0, 12);
             } else {
-                const firstY = rawPeaks[0].y;
-                const lastY = rawPeaks[rawPeaks.length - 1].y;
-                boundPeaks = [];
+                const firstY = rawPeaks.length > 0 ? rawPeaks[0].y : (startY + scanHeight * 0.08);
+                const lastY = rawPeaks.length > 0 ? rawPeaks[rawPeaks.length - 1].y : (startY + scanHeight * 0.88);
 
                 for (let i = 0; i < 12; i++) {
                     const ratio = i / 11;
@@ -1296,16 +1321,14 @@
                     if (closest && minDist < 15) {
                         boundPeaks.push(closest);
                     } else {
-                        const h = workingCanvas.height;
-                        const startY = h * wellYRatio;
-                        const scanHeight = h - startY;
+                        const rf = (approxY - startY) / scanHeight;
                         boundPeaks.push({
                             y: approxY,
-                            rf: (approxY - startY) / scanHeight,
+                            rf: Math.max(0.02, Math.min(0.98, rf)),
                             peakIntensity: 50,
                             auc: 500,
-                            bp: null,
-                            ng: null
+                            bp: NACALAI_100BP_SPECS[i].bp,
+                            ng: NACALAI_100BP_SPECS[i].ng
                         });
                     }
                 }
@@ -1395,90 +1418,104 @@
             let refAUC = 100;
             const ladderPeaks = detectedLanes[ladderLaneIndex]?.peaks || [];
             const peak500 = ladderPeaks.find(p => p.bp === 500) || ladderPeaks[Math.floor(ladderPeaks.length / 2)];
-            if (peak500) refAUC = peak500.auc / 90;
+            if (peak500 && peak500.auc) refAUC = peak500.auc / 90;
 
             detectedLanes.forEach((lane, lIdx) => {
                 lane.peaks.forEach(p => {
                     if (lIdx !== ladderLaneIndex || !p.bp) {
                         p.bp = calibrationSpline(p.rf);
-                        p.ng = Math.max(5, Math.round(p.auc / (refAUC || 1)));
+                        p.ng = Math.max(5, Math.round((p.auc || 500) / (refAUC || 1)));
                     }
                 });
             });
         }
 
         function renderCalibrationChart() {
-            const chartCtx = document.getElementById('calibrationChart').getContext('2d');
-            if (calibrationChart) calibrationChart.destroy();
+            const chartCanvas = document.getElementById('calibrationChart');
+            if (!chartCanvas) return;
+            const chartCtx = chartCanvas.getContext('2d');
+
+            if (calibrationChart) {
+                try { calibrationChart.destroy(); } catch(e) {}
+            }
 
             const ladderPeaks = detectedLanes[ladderLaneIndex]?.peaks || [];
-            const dataPoints = ladderPeaks.filter(p => p.bp).map(p => ({ x: p.rf, y: p.bp }));
+            const dataPoints = ladderPeaks.filter(p => p.bp && !isNaN(p.rf) && !isNaN(p.bp)).map(p => ({ x: p.rf, y: p.bp }));
 
             const curvePoints = [];
-            for (let rf = 0.05; rf <= 1.0; rf += 0.02) {
-                if (calibrationSpline) {
-                    curvePoints.push({ x: parseFloat(rf.toFixed(2)), y: calibrationSpline(rf) });
+            if (calibrationSpline) {
+                for (let rf = 0.05; rf <= 0.98; rf += 0.02) {
+                    const val = calibrationSpline(rf);
+                    if (!isNaN(val) && val > 0) {
+                        curvePoints.push({ x: parseFloat(rf.toFixed(2)), y: val });
+                    }
                 }
             }
 
-            calibrationChart = new Chart(chartCtx, {
-                type: 'scatter',
-                data: {
-                    datasets: [
-                        {
-                            label: 'ラダーマーカー (12本)',
-                            data: dataPoints,
-                            backgroundColor: '#10b981',
-                            borderColor: '#ffffff',
-                            borderWidth: 1.5,
-                            pointRadius: 4
-                        },
-                        {
-                            label: '単調3次スプライン検量線',
-                            data: curvePoints,
-                            type: 'line',
-                            borderColor: '#3b82f6',
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0,
-                            pointRadius: 0
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: {
-                            type: 'linear',
-                            min: 0,
-                            max: 1.0,
-                            title: { display: true, text: '相対移動度 (Rf)', color: '#9ca3af', font: { size: 9 } },
-                            grid: { color: '#1e293b' },
-                            ticks: { color: '#9ca3af', font: { size: 8 } }
-                        },
-                        y: {
-                            type: 'logarithmic',
-                            min: 50,
-                            max: 2000,
-                            title: { display: true, text: '塩基長 (bp)', color: '#9ca3af', font: { size: 9 } },
-                            grid: { color: '#1e293b' },
-                            ticks: { 
-                                color: '#9ca3af', 
-                                font: { size: 8 },
-                                callback: function(value) {
-                                    return [100, 200, 300, 400, 500, 700, 1000, 1500].includes(value) ? value + ' bp' : null;
+            try {
+                calibrationChart = new Chart(chartCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'ラダーマーカー (12本)',
+                                data: dataPoints,
+                                backgroundColor: '#10b981',
+                                borderColor: '#ffffff',
+                                borderWidth: 1.5,
+                                pointRadius: 4
+                            },
+                            {
+                                label: '単調3次スプライン検量線',
+                                data: curvePoints,
+                                type: 'line',
+                                borderColor: '#3b82f6',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0,
+                                pointRadius: 0
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                min: 0,
+                                max: 1.0,
+                                title: { display: true, text: '相対移動度 (Rf)', color: '#9ca3af', font: { size: 9 } },
+                                grid: { color: '#1e293b' },
+                                ticks: { color: '#9ca3af', font: { size: 8 } }
+                            },
+                            y: {
+                                type: 'logarithmic',
+                                min: 50,
+                                max: 2000,
+                                title: { display: true, text: '塩基長 (bp)', color: '#9ca3af', font: { size: 9 } },
+                                grid: { color: '#1e293b' },
+                                ticks: { 
+                                    color: '#9ca3af', 
+                                    font: { size: 8 },
+                                    callback: function(value) {
+                                        return [100, 200, 300, 400, 500, 700, 1000, 1500].includes(value) ? value + ' bp' : null;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
+            } catch (err) {
+                console.warn("Chart rendering notice:", err);
+            }
         }
 
         function populateBandsTable() {
             const tbody = document.getElementById('band-results-tbody');
+            if (!tbody) return;
             tbody.innerHTML = '';
             let totalBands = 0;
 
@@ -1500,7 +1537,8 @@
                 });
             });
 
-            document.getElementById('total-bands-count').innerText = `検出バンド: ${totalBands}本`;
+            const countEl = document.getElementById('total-bands-count');
+            if (countEl) countEl.innerText = `検出バンド: ${totalBands}本`;
         }
 
         function renderAll() {
@@ -1664,7 +1702,6 @@
             }
         }
 
-        // Pointer Events for Corner Dragging
         mainCanvas.addEventListener('pointerdown', (e) => {
             if (!rawImage) return;
 
@@ -1719,17 +1756,24 @@
 
         function toggleGelGuide() {
             gelGuideVisible = !gelGuideVisible;
-            gelGuide.classList.toggle('hidden', !gelGuideVisible);
+            if (gelGuide) gelGuide.classList.toggle('hidden', !gelGuideVisible);
         }
 
         function resetImage() {
             if (stream) {
-                document.getElementById('live-container').classList.remove('hidden');
+                const liveBox = document.getElementById('live-container');
+                if (liveBox) liveBox.classList.remove('hidden');
                 video.classList.remove('hidden');
             }
-            document.getElementById('canvas-container').classList.add('hidden');
-            document.getElementById('image-source-label').innerHTML = '<i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ起動中';
-            document.getElementById('reset-img-btn').classList.add('hidden');
+            const canvasBox = document.getElementById('canvas-container');
+            if (canvasBox) canvasBox.classList.add('hidden');
+            
+            const srcLabel = document.getElementById('image-source-label');
+            if (srcLabel) srcLabel.innerHTML = '<i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ起動中';
+            
+            const resetBtn = document.getElementById('reset-img-btn');
+            if (resetBtn) resetBtn.classList.add('hidden');
+            
             rawImage = null;
             switchTab('capture');
         }
@@ -1748,10 +1792,10 @@
             eCtx.fillStyle = '#0f172a';
             eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
-            const title = document.getElementById('report-title').value || 'Gel Analysis Result';
-            const agarose = document.getElementById('report-agarose').value;
-            const stain = document.getElementById('report-stain').value;
-            const notes = document.getElementById('report-notes').value;
+            const title = document.getElementById('report-title')?.value || 'Gel Analysis Result';
+            const agarose = document.getElementById('report-agarose')?.value || '';
+            const stain = document.getElementById('report-stain')?.value || '';
+            const notes = document.getElementById('report-notes')?.value || '';
             const dateStr = new Date().toLocaleString('ja-JP');
 
             eCtx.fillStyle = '#10b981';
