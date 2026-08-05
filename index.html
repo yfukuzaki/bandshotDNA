@@ -90,11 +90,27 @@
         <div class="flex-1 flex flex-col items-center justify-center bg-gray-900 rounded-2xl border border-gray-800 p-3 relative overflow-hidden checkerboard min-h-[440px]">
             
             <!-- Live Video Stream -->
-            <div id="live-container" class="relative w-full h-full flex items-center justify-center">
-                <video id="video" autoplay playsinline muted class="rounded-lg shadow-2xl max-h-[60vh] w-full object-contain"></video>
+            <div id="live-container" class="relative w-full h-full flex items-center justify-center overflow-hidden">
+                <video id="video" autoplay playsinline muted class="rounded-lg shadow-2xl max-h-[60vh] w-full object-contain transition-transform duration-75"></video>
                 <div id="gel-guide" class="absolute pointer-events-none border-2 border-emerald-400/70 border-dashed rounded-lg flex items-center justify-center hidden" style="width: 260px; height: 260px;">
                     <div class="text-xs text-emerald-300/80 bg-gray-900/80 px-2 py-1 rounded border border-emerald-500/30">
                         ゲル撮影ガイド枠
+                    </div>
+                </div>
+
+                <!-- Zoom Controls Overlay -->
+                <div id="zoom-control-box" class="absolute top-3 right-3 z-20 flex flex-col items-end space-y-1 bg-gray-950/80 backdrop-blur p-2 rounded-xl border border-gray-800 text-xs shadow pointer-events-auto">
+                    <div class="flex items-center space-x-1.5 text-gray-300">
+                        <i class="fa-solid fa-magnifying-glass text-emerald-400 text-[11px]"></i>
+                        <span id="zoom-label" class="font-bold text-emerald-400 w-9 text-right font-mono">1.0x</span>
+                        <span id="zoom-type-badge" class="text-[9px] px-1 py-0.2 rounded bg-gray-800 text-gray-400 font-bold">DIGITAL</span>
+                    </div>
+                    <input type="range" id="zoom-slider" min="1.0" max="3.0" step="0.1" value="1.0" oninput="onZoomSliderInput(this.value)" class="w-24 accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer mt-1">
+                    <div class="flex space-x-1 pt-0.5">
+                        <button id="btn-zoom-05" onclick="setZoom(0.5)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 hidden">0.5x</button>
+                        <button onclick="setZoom(1.0)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">1x</button>
+                        <button onclick="setZoom(2.0)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">2x</button>
+                        <button onclick="setZoom(3.0)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">3x</button>
                     </div>
                 </div>
             </div>
@@ -345,17 +361,29 @@
         let rawImage = null;
         let stream = null;
         let activeFacingMode = "environment"; // default back camera
+        let availableVideoDevices = [];
+        let currentDeviceIndex = 0;
         let displayMode = 'bp'; // 'bp' or 'both'
+
+        // Zoom State Variables
+        let currentZoom = 1.0;
+        let minZoom = 1.0;
+        let maxZoom = 3.0;
+        let hasHardwareZoom = false;
+        let videoTrack = null;
+        let initialPinchDistance = null;
+        let initialPinchZoom = 1.0;
 
         const mainCanvas = document.getElementById('main-canvas');
         const mainCtx = mainCanvas.getContext('2d');
 
+        // Missing canvas elements & state declarations
         const baseCanvas = document.createElement('canvas');
         const workingCanvas = document.createElement('canvas');
 
-        let video = document.getElementById('video');
+        const video = document.getElementById('video');
+        const gelGuide = document.getElementById('gel-guide');
         let gelGuideVisible = false;
-        let gelGuide = document.getElementById('gel-guide');
 
         let corners = [
             { x: 0.15, y: 0.15 },
@@ -367,27 +395,13 @@
 
         let wellYRatio = 0.10;
         let laneCount = 6;
-        let peakSensitivity = 25; // Default sensitivity fixed to 25
+        let peakSensitivity = 25;
         let detectedLanes = [];
         let ladderLaneIndex = 0;
         let calibrationSpline = null;
         let calibrationChart = null;
 
-        function setDisplayMode(mode) {
-            displayMode = mode;
-            const btnBp = document.getElementById('btn-show-bp');
-            const btnBoth = document.getElementById('btn-show-both');
-            if (mode === 'bp') {
-                btnBp.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
-                btnBoth.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
-            } else {
-                btnBoth.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
-                btnBp.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
-            }
-            renderAll();
-        }
-
-        // Robust Camera Initialization with Multi-Stage Fallbacks (SynestheCam Reference)
+        // Robust Camera Initialization with Multi-Stage Fallbacks & Device Enumeration
         async function startCamera() {
             const badge = document.getElementById('camera-status-badge');
             
@@ -401,7 +415,15 @@
                 return;
             }
 
-            const constraintsExact = {
+            // カメラデバイス一覧の取得（マルチカメラ/超広角対応）
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                availableVideoDevices = devices.filter(d => d.kind === 'videoinput');
+            } catch (e) {
+                availableVideoDevices = [];
+            }
+
+            let constraintsExact = {
                 audio: false,
                 video: {
                     facingMode: activeFacingMode === "environment" ? { exact: "environment" } : "user",
@@ -409,6 +431,18 @@
                     height: { ideal: 1080 }
                 }
             };
+
+            // 特定のデバイスIDが選択されている場合
+            if (availableVideoDevices.length > 0 && availableVideoDevices[currentDeviceIndex]?.deviceId) {
+                constraintsExact = {
+                    audio: false,
+                    video: {
+                        deviceId: { exact: availableVideoDevices[currentDeviceIndex].deviceId },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+            }
 
             const constraintsLoose = {
                 audio: false,
@@ -425,7 +459,7 @@
             };
 
             try {
-                // First Attempt: Exact Facing Mode
+                // First Attempt: Exact Constraint or Specified Device ID
                 stream = await navigator.mediaDevices.getUserMedia(constraintsExact);
                 handleCameraSuccess(stream, badge);
             } catch (err1) {
@@ -451,6 +485,12 @@
             video.srcObject = s;
             video.classList.remove('hidden');
 
+            const videoTracks = s.getVideoTracks();
+            if (videoTracks.length > 0) {
+                videoTrack = videoTracks[0];
+                checkHardwareZoomSupport();
+            }
+
             // Force play video for mobile browser auto-play policies
             video.play().then(() => {
                 badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
@@ -462,8 +502,128 @@
             });
         }
 
+        // Camera Hardware & Digital Zoom Logic (Expanded for Wide Angle < 1.0)
+        function checkHardwareZoomSupport() {
+            hasHardwareZoom = false;
+            minZoom = 1.0;
+            maxZoom = 3.0;
+
+            if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
+                try {
+                    const capabilities = videoTrack.getCapabilities();
+                    if (capabilities && capabilities.zoom) {
+                        hasHardwareZoom = true;
+                        minZoom = capabilities.zoom.min || 1.0;
+                        maxZoom = Math.min(capabilities.zoom.max || 5.0, 5.0);
+                    }
+                } catch (e) {
+                    hasHardwareZoom = false;
+                }
+            }
+
+            // デジタルズームの場合、1.0未満への縮小は画角上不可のため1.0に固定
+            if (!hasHardwareZoom) {
+                minZoom = 1.0;
+            }
+
+            const slider = document.getElementById('zoom-slider');
+            if (slider) {
+                slider.min = minZoom;
+                slider.max = maxZoom;
+                if (currentZoom < minZoom) currentZoom = minZoom;
+                slider.value = currentZoom;
+            }
+
+            const btn05 = document.getElementById('btn-zoom-05');
+            if (btn05) {
+                if (minZoom < 1.0) {
+                    btn05.classList.remove('hidden');
+                } else {
+                    btn05.classList.add('hidden');
+                }
+            }
+
+            const badge = document.getElementById('zoom-type-badge');
+            if (badge) {
+                badge.innerText = hasHardwareZoom ? "OPTICAL" : "DIGITAL";
+                badge.className = hasHardwareZoom 
+                    ? "text-[9px] px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold" 
+                    : "text-[9px] px-1 py-0.2 rounded bg-gray-800 text-gray-400 font-bold";
+            }
+
+            applyZoom(currentZoom);
+        }
+
+        function applyZoom(val) {
+            currentZoom = Math.max(minZoom, Math.min(maxZoom, parseFloat(val)));
+
+            const label = document.getElementById('zoom-label');
+            if (label) label.innerText = `${currentZoom.toFixed(1)}x`;
+
+            const slider = document.getElementById('zoom-slider');
+            if (slider) slider.value = currentZoom;
+
+            if (hasHardwareZoom && videoTrack) {
+                try {
+                    videoTrack.applyConstraints({ advanced: [{ zoom: currentZoom }] }).catch(() => {
+                        video.style.transform = `scale(${Math.max(1.0, currentZoom)})`;
+                    });
+                    video.style.transform = 'scale(1)';
+                } catch (e) {
+                    video.style.transform = `scale(${Math.max(1.0, currentZoom)})`;
+                }
+            } else {
+                video.style.transform = `scale(${Math.max(1.0, currentZoom)})`;
+                video.style.transformOrigin = 'center center';
+            }
+        }
+
+        function onZoomSliderInput(val) {
+            applyZoom(val);
+        }
+
+        function setZoom(val) {
+            applyZoom(val);
+        }
+
+        function setupPinchToZoom() {
+            const container = document.getElementById('live-container');
+            if (!container) return;
+
+            container.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    initialPinchDistance = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    initialPinchZoom = currentZoom;
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 2 && initialPinchDistance) {
+                    const currentDistance = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const factor = currentDistance / initialPinchDistance;
+                    applyZoom(initialPinchZoom * factor);
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchend', (e) => {
+                if (e.touches.length < 2) {
+                    initialPinchDistance = null;
+                }
+            }, { passive: true });
+        }
+
         function switchCameraMode() {
-            activeFacingMode = (activeFacingMode === "environment") ? "user" : "environment";
+            if (availableVideoDevices.length > 1) {
+                currentDeviceIndex = (currentDeviceIndex + 1) % availableVideoDevices.length;
+            } else {
+                activeFacingMode = (activeFacingMode === "environment") ? "user" : "environment";
+            }
             startCamera();
         }
 
@@ -495,9 +655,23 @@
         function takeSnapshot() {
             if (!video.videoWidth) return;
             const temp = document.createElement('canvas');
-            temp.width = video.videoWidth;
-            temp.height = video.videoHeight;
-            temp.getContext('2d').drawImage(video, 0, 0);
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            temp.width = vw;
+            temp.height = vh;
+            const ctx = temp.getContext('2d');
+
+            if (hasHardwareZoom || currentZoom === 1.0) {
+                ctx.drawImage(video, 0, 0, vw, vh);
+            } else {
+                // Digital zoom crop center portion
+                const cropWidth = vw / currentZoom;
+                const cropHeight = vh / currentZoom;
+                const cropX = (vw - cropWidth) / 2;
+                const cropY = (vh - cropHeight) / 2;
+
+                ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, vw, vh);
+            }
 
             const img = new Image();
             img.onload = () => loadRawImage(img, "撮影画像");
@@ -1629,6 +1803,7 @@
         window.onload = () => {
             startCamera();
             setupDragAndDrop();
+            setupPinchToZoom();
         };
     </script>
 </body>
