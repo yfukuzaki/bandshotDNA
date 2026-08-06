@@ -7,7 +7,7 @@
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js CDN -->
+    <!-- Chart.js CDN (バックグラウンド計算用) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- FontAwesome Icons CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
@@ -41,106 +41,138 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #10b981;
         }
+
+        /* ピント合わせアニメーション (フォーカスリング) */
+        @keyframes focusPulse {
+            0% { transform: scale(1.4); opacity: 0.9; border-color: #34d399; }
+            50% { transform: scale(1.0); opacity: 1; border-color: #10b981; }
+            100% { transform: scale(1.0); opacity: 0; border-color: #059669; }
+        }
+        .focus-ring-anim {
+            animation: focusPulse 0.75s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col font-sans select-none">
 
-    <!-- App Header -->
-    <header class="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between shadow-md">
-        <div class="flex items-center space-x-3">
-            <div class="bg-emerald-600 text-white p-2 rounded-lg shadow-lg shadow-emerald-950">
-                <i class="fa-solid fa-dna text-xl"></i>
+    <!-- アプリケーションヘッダー -->
+    <header class="bg-gray-900 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between shadow-md shrink-0">
+        <div class="flex items-center space-x-2.5">
+            <div class="bg-emerald-600 text-white p-1.5 rounded-lg shadow-lg shadow-emerald-950">
+                <i class="fa-solid fa-dna text-lg"></i>
             </div>
             <div>
-                <h1 class="text-lg font-bold leading-tight tracking-wide">GelVision Pro</h1>
-                <p class="text-xs text-gray-400">Integrated DNA Gel Analyzer & Calibration System</p>
+                <h1 class="text-base font-bold leading-tight tracking-wide">GelVision Pro</h1>
+                <p class="text-[10px] text-gray-400">DNA Gel Analyzer & Calibration System</p>
             </div>
         </div>
         <div class="flex items-center space-x-2">
-            <span id="camera-status-badge" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+            <span id="camera-status-badge" class="px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
                 <i class="fa-solid fa-circle-notch fa-spin mr-1"></i>準備中
             </span>
         </div>
     </header>
 
-    <!-- Navigation Tabs -->
-    <nav class="bg-gray-900/80 backdrop-blur border-b border-gray-800 px-2 sm:px-4 flex justify-around text-xs sm:text-sm font-medium">
-        <button id="tab-capture" onclick="switchTab('capture')" class="py-3 px-3 border-b-2 border-emerald-500 text-emerald-400 flex items-center space-x-1.5">
+    <!-- ナビゲーションタブ -->
+    <nav class="bg-gray-900/80 backdrop-blur border-b border-gray-800 px-2 sm:px-4 flex justify-around text-xs sm:text-sm font-medium shrink-0">
+        <button id="tab-capture" onclick="switchTab('capture')" class="py-2.5 px-3 border-b-2 border-emerald-500 text-emerald-400 flex items-center space-x-1.5">
             <i class="fa-solid fa-camera"></i>
             <span>1. 撮影</span>
         </button>
-        <button id="tab-transform" onclick="switchTab('transform')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
+        <button id="tab-transform" onclick="switchTab('transform')" class="py-2.5 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-object-group text-emerald-400"></i>
             <span>2. 位置補正</span>
         </button>
-        <button id="tab-analysis" onclick="switchTab('analysis')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
+        <button id="tab-analysis" onclick="switchTab('analysis')" class="py-2.5 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-chart-line text-emerald-400"></i>
             <span>3. 解析</span>
         </button>
-        <button id="tab-report" onclick="switchTab('report')" class="py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
+        <button id="tab-report" onclick="switchTab('report')" class="py-2.5 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5">
             <i class="fa-solid fa-file-export"></i>
             <span>4. 保存</span>
         </button>
     </nav>
 
-    <!-- Main Workspace -->
-    <main class="flex-1 flex flex-col md:flex-row overflow-hidden max-w-7xl w-full mx-auto p-2 md:p-4 gap-4">
+    <!-- メインワークスペース -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden max-w-7xl w-full mx-auto p-2 md:p-4 gap-3">
 
-        <!-- Left Image Viewport -->
-        <div class="flex-1 flex flex-col items-center justify-center bg-gray-900 rounded-2xl border border-gray-800 p-3 relative overflow-hidden checkerboard min-h-[440px]">
+        <!-- 左側：ビューポート（カメラ・キャンバス表示領域） -->
+        <div class="flex-1 flex flex-col items-center justify-center bg-gray-900 rounded-2xl border border-gray-800 p-2 relative overflow-hidden checkerboard min-h-[380px]">
             
-            <!-- Live Video Stream -->
-            <div id="live-container" class="relative w-full h-full flex items-center justify-center overflow-hidden">
-                <video id="video" autoplay playsinline muted class="rounded-lg shadow-2xl max-h-[60vh] w-full object-contain transition-transform duration-75"></video>
-                <div id="gel-guide" class="absolute pointer-events-none border-2 border-emerald-400/70 border-dashed rounded-lg flex items-center justify-center hidden" style="width: 260px; height: 260px;">
-                    <div class="text-xs text-emerald-300/80 bg-gray-900/80 px-2 py-1 rounded border border-emerald-500/30">
-                        ゲル撮影ガイド枠
-                    </div>
-                </div>
+            <!-- カメラリアルタイム映像コンテナ -->
+            <div id="live-container" class="relative w-full flex items-center justify-center overflow-hidden cursor-pointer rounded-xl bg-black shadow-2xl transition-all max-h-[52vh]">
+                <div id="viewfinder-frame" class="relative w-full aspect-square max-h-[50vh] flex items-center justify-center overflow-hidden rounded-lg border-2 border-emerald-500/40 shadow-inner">
+                    
+                    <video id="video" autoplay playsinline muted class="w-full h-full object-cover transition-all duration-150"></video>
 
-                <!-- Zoom Controls Overlay -->
-                <div id="zoom-control-box" class="absolute top-3 right-3 z-20 flex flex-col items-end space-y-1 bg-gray-950/80 backdrop-blur p-2 rounded-xl border border-gray-800 text-xs shadow pointer-events-auto">
-                    <div class="flex items-center space-x-1.5 text-gray-300">
-                        <i class="fa-solid fa-magnifying-glass text-emerald-400 text-[11px]"></i>
-                        <span id="zoom-label" class="font-bold text-emerald-400 w-9 text-right font-mono">1.0x</span>
-                        <span id="zoom-type-badge" class="text-[9px] px-1 py-0.2 rounded bg-gray-800 text-gray-400 font-bold">DIGITAL</span>
+                    <!-- フォーカスリング演出UI -->
+                    <div id="focus-ring" class="absolute w-12 h-12 border-2 border-emerald-400 rounded-lg pointer-events-none opacity-0 z-20 flex items-center justify-center shadow-lg shadow-emerald-950/50">
+                        <div class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
                     </div>
-                    <input type="range" id="zoom-slider" min="1.0" max="3.0" step="0.1" value="1.0" oninput="onZoomSliderInput(this.value)" class="w-24 accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer mt-1">
-                    <div class="flex space-x-1 pt-0.5">
-                        <button id="btn-zoom-05" onclick="setZoom(0.5)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 hidden">0.5x</button>
-                        <button onclick="setZoom(1.0)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">1x</button>
-                        <button onclick="setZoom(2.0)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">2x</button>
-                        <button onclick="setZoom(3.0)" class="px-1.5 py-0.5 text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">3x</button>
+
+                    <!-- ゲル撮影ガイド枠 -->
+                    <div id="gel-guide" class="absolute pointer-events-none border-2 border-emerald-400/80 border-dashed rounded-lg flex items-center justify-center hidden z-10 w-[75%] h-[75%]">
+                        <div class="text-[10px] text-emerald-300 bg-gray-950/80 px-2 py-0.5 rounded border border-emerald-500/40 shadow">
+                            ゲル配置ガイド
+                        </div>
+                    </div>
+
+                    <!-- ファインダー四隅ターゲットマーク -->
+                    <div class="absolute inset-2 pointer-events-none border border-white/10 rounded">
+                        <div class="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-emerald-400"></div>
+                        <div class="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-emerald-400"></div>
+                        <div class="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-emerald-400"></div>
+                        <div class="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-emerald-400"></div>
+                    </div>
+
+                    <!-- ズーム操作オーバーレイ -->
+                    <div id="zoom-control-box" class="absolute top-2 right-2 z-20 flex flex-col items-end space-y-1 bg-gray-950/85 backdrop-blur px-2 py-1.5 rounded-xl border border-gray-800 text-xs shadow pointer-events-auto">
+                        <div class="flex items-center space-x-1 text-gray-300">
+                            <i class="fa-solid fa-magnifying-glass text-emerald-400 text-[10px]"></i>
+                            <span id="zoom-label" class="font-bold text-emerald-400 w-8 text-right font-mono text-[11px]">1.0x</span>
+                            <span id="zoom-type-badge" class="text-[8px] px-1 py-0.2 rounded bg-gray-800 text-gray-400 font-bold">DIGITAL</span>
+                        </div>
+                        <input type="range" id="zoom-slider" min="1.0" max="3.0" step="0.1" value="1.0" oninput="onZoomSliderInput(this.value)" class="w-20 accent-emerald-500 h-1 bg-gray-800 rounded-lg cursor-pointer mt-0.5">
+                        <div class="flex space-x-1 pt-0.5">
+                            <button id="btn-zoom-05" onclick="setZoom(0.5)" class="px-1 py-0.2 text-[9px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 hidden">0.5x</button>
+                            <button onclick="setZoom(1.0)" class="px-1 py-0.2 text-[9px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">1x</button>
+                            <button onclick="setZoom(2.0)" class="px-1 py-0.2 text-[9px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">2x</button>
+                            <button onclick="setZoom(3.0)" class="px-1 py-0.2 text-[9px] bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700">3x</button>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Canvas Display -->
+            <!-- 解析用キャンバス描画コンテナ -->
             <div id="canvas-container" class="relative w-full h-full flex items-center justify-center hidden">
-                <canvas id="main-canvas" class="max-w-full max-h-[60vh] rounded-lg shadow-2xl object-contain cursor-crosshair"></canvas>
+                <canvas id="main-canvas" class="max-w-full max-h-[58vh] rounded-lg shadow-2xl object-contain cursor-crosshair"></canvas>
             </div>
 
-            <!-- Drag & Drop Overlay -->
+            <!-- ドラッグ＆ドロップ用オーバーレイ -->
             <div id="drag-drop-overlay" class="absolute inset-0 bg-emerald-950/80 border-4 border-dashed border-emerald-500 rounded-2xl flex flex-col items-center justify-center hidden z-30 transition-all">
                 <i class="fa-solid fa-cloud-arrow-up text-5xl text-emerald-400 mb-2 animate-bounce"></i>
                 <p class="text-lg font-bold text-white">ゲルの写真ファイルをドロップ</p>
             </div>
 
-            <!-- Image Overlay Controls -->
-            <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
-                <div class="bg-gray-950/80 backdrop-blur px-3 py-1.5 rounded-full border border-gray-800 text-xs text-gray-300 pointer-events-auto flex items-center space-x-2 shadow">
-                    <span id="image-source-label"><i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ起動中</span>
+            <!-- 画像コントロールバー -->
+            <div class="absolute bottom-2 left-2 right-2 flex items-center justify-between pointer-events-none">
+                <div class="bg-gray-950/85 backdrop-blur px-2.5 py-1 rounded-full border border-gray-800 text-[11px] text-gray-300 pointer-events-auto flex items-center space-x-1.5 shadow">
+                    <span id="image-source-label"><i class="fa-solid fa-video mr-1 text-emerald-400"></i>ファインダー</span>
                 </div>
-                <div class="flex space-x-2 pointer-events-auto">
-                    <button onclick="switchCameraMode()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg border border-gray-700 text-xs flex items-center space-x-1 shadow transition">
+                <div class="flex space-x-1 pointer-events-auto">
+                    <button onclick="cycleAspectRatio()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-1 rounded-lg border border-gray-700 text-[11px] flex items-center space-x-1 shadow transition">
+                        <i class="fa-solid fa-crop-simple text-emerald-400"></i>
+                        <span id="aspect-ratio-label">1:1</span>
+                    </button>
+                    <button onclick="switchCameraMode()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-1 rounded-lg border border-gray-700 text-[11px] flex items-center space-x-1 shadow transition">
                         <i class="fa-solid fa-camera-rotate text-emerald-400"></i>
-                        <span>カメラ切替</span>
+                        <span>切替</span>
                     </button>
-                    <button onclick="toggleGelGuide()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg border border-gray-700 text-xs flex items-center space-x-1 shadow transition">
+                    <button onclick="toggleGelGuide()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-1 rounded-lg border border-gray-700 text-[11px] flex items-center space-x-1 shadow transition">
                         <i class="fa-solid fa-vector-square text-emerald-400"></i>
-                        <span>ガイド枠</span>
+                        <span>ガイド</span>
                     </button>
-                    <button id="reset-img-btn" onclick="resetImage()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-3 py-1.5 rounded-lg border border-gray-700 text-xs flex items-center space-x-1 shadow hidden transition">
+                    <button id="reset-img-btn" onclick="resetImage()" class="bg-gray-800 hover:bg-gray-700 text-gray-200 px-2 py-1 rounded-lg border border-gray-700 text-[11px] flex items-center space-x-1 shadow hidden transition">
                         <i class="fa-solid fa-rotate-left text-amber-400"></i>
                         <span>リセット</span>
                     </button>
@@ -148,37 +180,49 @@
             </div>
         </div>
 
-        <!-- Right Control Sidebar -->
-        <div class="w-full md:w-80 lg:w-96 flex flex-col gap-3 overflow-y-auto max-h-[calc(100vh-140px)] pr-1">
+        <!-- 右側：操作パネルエリア -->
+        <div class="w-full md:w-80 lg:w-96 flex flex-col gap-3 overflow-y-auto max-h-[calc(100vh-130px)] pr-1">
 
-            <!-- Step 1 Panel -->
-            <div id="panel-capture" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-4 shadow-lg">
+            <!-- ステップ 1 パネル：撮影 -->
+            <div id="panel-capture" class="bg-gray-900 border border-gray-800 rounded-2xl p-3.5 flex flex-col gap-3 shadow-lg">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
-                    <i class="fa-solid fa-camera-retro text-emerald-400 mr-2"></i>1. 撮影
+                    <i class="fa-solid fa-camera-retro text-emerald-400 mr-2"></i>1. 撮影・画像読込
                 </h2>
 
-                <div class="bg-gray-950 p-3.5 rounded-xl border border-gray-800 space-y-2">
+                <!-- ランダム生成練習モード -->
+                <div class="bg-gradient-to-br from-emerald-950/60 to-gray-950 p-3 rounded-xl border border-emerald-500/30 space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-xs font-semibold text-gray-300">カメラ直接撮影</span>
-                        <button onclick="restartCamera()" class="text-xs text-emerald-400 hover:underline"><i class="fa-solid fa-arrows-rotate mr-1"></i>再起動</button>
+                        <span class="text-xs font-bold text-emerald-300"><i class="fa-solid fa-graduation-cap text-emerald-400 mr-1.5"></i>DNA解析トレーニングモード</span>
+                        <span class="text-[9px] bg-emerald-900/80 text-emerald-200 px-1.5 py-0.5 rounded border border-emerald-700">ランダム生成</span>
                     </div>
-                    <button id="shutter-btn" onclick="takeSnapshot()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-lg flex items-center justify-center space-x-2 shadow-lg shadow-emerald-950 transition active:scale-95">
-                        <i class="fa-solid fa-circle-dot text-lg animate-pulse"></i>
-                        <span>ゲル写真を撮影</span>
+                    <button onclick="loadDemoSampleGelImage()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-3 rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-emerald-950 transition active:scale-95 text-xs">
+                        <i class="fa-solid fa-dice text-base"></i>
+                        <span>解析練習用ゲルを生成</span>
                     </button>
                 </div>
 
-                <div class="bg-gray-950 p-3.5 rounded-xl border border-gray-800 space-y-2">
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-gray-300">ファインダー直接撮影</span>
+                        <button onclick="restartCamera()" class="text-xs text-emerald-400 hover:underline"><i class="fa-solid fa-arrows-rotate mr-1"></i>再起動</button>
+                    </div>
+                    <button id="shutter-btn" onclick="takeSnapshot()" class="w-full bg-gray-800 hover:bg-gray-700 text-emerald-400 border border-emerald-500/40 font-bold py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow transition active:scale-95 text-xs">
+                        <i class="fa-solid fa-circle-dot text-base animate-pulse"></i>
+                        <span class="tracking-wide">シャッターを切る</span>
+                    </button>
+                </div>
+
+                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-1.5">
                     <span class="text-xs font-semibold text-gray-300 block">写真ファイル選択</span>
-                    <label class="w-full bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-emerald-500 text-gray-300 text-xs font-medium py-3 px-4 rounded-lg flex flex-col items-center justify-center cursor-pointer transition group">
-                        <i class="fa-solid fa-folder-open text-emerald-400 text-xl mb-1 group-hover:scale-110 transition-transform"></i>
+                    <label class="w-full bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 hover:border-emerald-500 text-gray-300 text-xs font-medium py-2 px-3 rounded-lg flex flex-col items-center justify-center cursor-pointer transition group">
+                        <i class="fa-solid fa-folder-open text-emerald-400 text-base mb-0.5 group-hover:scale-110 transition-transform"></i>
                         <span>ファイルを選択 (Drag & Drop可)</span>
                         <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)" class="hidden">
                     </label>
                 </div>
             </div>
 
-            <!-- Step 2 Panel -->
+            <!-- ステップ 2 パネル：位置補正 -->
             <div id="panel-transform" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
                     <i class="fa-solid fa-wand-magic-sparkles text-emerald-400 mr-2"></i>2. 位置補正
@@ -226,19 +270,34 @@
                 </button>
             </div>
 
-            <!-- Step 3 Panel -->
+            <!-- ステップ 3 パネル：解析 -->
             <div id="panel-analysis" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
                     <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. 解析
                 </h2>
 
                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2.5 text-xs">
-                    <!-- Display Mode Switch Toggle -->
-                    <div class="flex justify-between items-center bg-gray-900 p-2 rounded-lg border border-gray-800">
-                        <span class="text-gray-300 font-medium"><i class="fa-solid fa-eye text-emerald-400 mr-1.5"></i>画像上の情報表示</span>
-                        <div class="flex space-x-1 bg-gray-950 p-1 rounded-md border border-gray-800">
-                            <button id="btn-show-bp" onclick="setDisplayMode('bp')" class="px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow">bpのみ</button>
-                            <button id="btn-show-both" onclick="setDisplayMode('both')" class="px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200">bp + ng</button>
+                    <!-- 表示切替コントロールパネル -->
+                    <div class="bg-gray-900 p-2.5 rounded-xl border border-gray-800 space-y-2">
+                        <span class="text-gray-300 font-medium block text-[11px]"><i class="fa-solid fa-eye text-emerald-400 mr-1.5"></i>画像上の情報表示設定</span>
+                        
+                        <div class="grid grid-cols-2 gap-1.5">
+                            <button id="btn-toggle-guides" onclick="toggleGuideLines()" class="py-1.5 px-2 text-[11px] font-bold rounded-lg bg-emerald-600 text-white shadow flex items-center justify-center space-x-1">
+                                <i class="fa-solid fa-border-top-left"></i>
+                                <span>ガイド線: ON</span>
+                            </button>
+                            <button id="btn-toggle-labels" onclick="toggleBandLabels()" class="py-1.5 px-2 text-[11px] font-bold rounded-lg bg-emerald-600 text-white shadow flex items-center justify-center space-x-1">
+                                <i class="fa-solid fa-tags"></i>
+                                <span>バンド注釈: ON</span>
+                            </button>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-1 border-t border-gray-800/60">
+                            <span class="text-gray-400 text-[10px]">注釈の表示詳細:</span>
+                            <div class="flex space-x-1 bg-gray-950 p-0.5 rounded-md border border-gray-800">
+                                <button id="btn-show-bp" onclick="setDisplayMode('bp')" class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-600 text-white shadow">bpのみ</button>
+                                <button id="btn-show-both" onclick="setDisplayMode('both')" class="px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-200">bp + ng</button>
+                            </div>
                         </div>
                     </div>
 
@@ -247,6 +306,18 @@
                         <span id="val-well-y" class="text-emerald-400 font-bold">10%</span>
                     </div>
                     <input type="range" id="slider-well-y" min="2" max="30" value="10" oninput="updateAnalysisParams()" class="w-full accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+
+                    <div class="flex justify-between items-center text-gray-300 pt-1">
+                        <span><i class="fa-solid fa-arrows-left-right mr-1 text-emerald-400"></i>レーン左右微調整 (Offset X)</span>
+                        <span id="val-lane-offset-x" class="text-emerald-400 font-bold">0px</span>
+                    </div>
+                    <input type="range" id="slider-lane-offset-x" min="-40" max="40" value="0" oninput="updateAnalysisParams()" class="w-full accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+
+                    <div class="flex justify-between items-center text-gray-300 pt-1">
+                        <span><i class="fa-solid fa-arrows-left-right-to-line mr-1 text-cyan-400"></i>レーン幅微調整 (Pitch)</span>
+                        <span id="val-lane-pitch-adj" class="text-cyan-400 font-bold">100%</span>
+                    </div>
+                    <input type="range" id="slider-lane-pitch-adj" min="80" max="120" value="100" oninput="updateAnalysisParams()" class="w-full accent-cyan-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
 
                     <div class="flex justify-between items-center text-gray-300 pt-1">
                         <span><i class="fa-solid fa-grip-lines-vertical mr-1 text-blue-400"></i>レーン分割数</span>
@@ -261,24 +332,9 @@
                     <input type="range" id="slider-band-sens" min="15" max="85" value="25" oninput="updateAnalysisParams()" class="w-full accent-amber-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
                 </div>
 
-                <div id="ladder-status-box" class="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl flex items-center space-x-3">
-                    <i class="fa-solid fa-award text-emerald-400 text-2xl"></i>
-                    <div class="text-xs">
-                        <div id="ladder-status-title" class="font-bold text-emerald-300">マーカー12本完全同定成功</div>
-                        <div id="ladder-status-desc" class="text-gray-300 text-[11px] leading-tight mt-0.5">
-                            全12本のバンド（1500bp〜100bp）を「ナカライ 100bp DNA Ladder One」に完全バインドしました。
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2">
-                    <div class="flex justify-between items-center text-xs">
-                        <span class="font-semibold text-gray-300"><i class="fa-solid fa-chart-line text-emerald-400 mr-1"></i>単調3次スプライン検量線 ($\log_{10}\text{bp} - Rf$)</span>
-                        <span class="text-[10px] text-emerald-400 font-mono font-bold">R² = 1.0000</span>
-                    </div>
-                    <div class="h-36 w-full">
-                        <canvas id="calibrationChart"></canvas>
-                    </div>
+                <!-- 裏計算用の非表示Chart canvas -->
+                <div class="hidden">
+                    <canvas id="calibrationChart"></canvas>
                 </div>
 
                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2 text-xs">
@@ -286,7 +342,7 @@
                         <span class="font-semibold text-gray-300"><i class="fa-solid fa-table-list text-blue-400 mr-1"></i>自動推定塩基長 (bp) & DNA量 (ng)</span>
                         <span id="total-bands-count" class="text-[10px] text-gray-400">検出バンド: -</span>
                     </div>
-                    <div class="max-h-36 overflow-y-auto pr-1">
+                    <div class="max-h-48 overflow-y-auto pr-1">
                         <table class="w-full text-left text-[11px]">
                             <thead class="text-gray-400 border-b border-gray-800 sticky top-0 bg-gray-950">
                                 <tr>
@@ -297,7 +353,7 @@
                                 </tr>
                             </thead>
                             <tbody id="band-results-tbody" class="divide-y divide-gray-900">
-                                <!-- Dynamic rows -->
+                                <!-- 動的行挿入エリア -->
                             </tbody>
                         </table>
                     </div>
@@ -309,7 +365,7 @@
                 </button>
             </div>
 
-            <!-- Step 4 Panel -->
+            <!-- ステップ 4 パネル：保存 -->
             <div id="panel-report" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
                     <i class="fa-solid fa-file-export text-emerald-400 mr-2"></i>4. 保存
@@ -325,6 +381,10 @@
                     <label class="block text-gray-300 font-semibold pt-1">核酸染色試薬</label>
                     <input type="text" id="report-stain" value="Ethidium Bromide (EtBr)" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500">
 
+                    <!-- 追加：実験場所項目 -->
+                    <label class="block text-gray-300 font-semibold pt-1"><i class="fa-solid fa-location-dot text-emerald-400 mr-1"></i>実験場所</label>
+                    <input type="text" id="report-location" value="長浜バイオ大学・実験室" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500">
+
                     <label class="block text-gray-300 font-semibold pt-1">実験メモ・所感</label>
                     <textarea id="report-notes" rows="2" placeholder="サンプルの抽出条件や備考を記述..." class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500"></textarea>
                 </div>
@@ -338,9 +398,8 @@
         </div>
     </main>
 
-    <!-- JavaScript Application Logic -->
     <script>
-        // Nacalai 100bp DNA Ladder One Specifications (12 bands)
+        // Nacalai 100bp DNA Ladder One 規格仕様 (正確な 12 bands)
         const NACALAI_100BP_SPECS = [
             { bp: 1500, ng: 30 },
             { bp: 1200, ng: 30 },
@@ -356,7 +415,7 @@
             { bp: 100,  ng: 50 }
         ];
 
-        // Global State Variables
+        // アプリケーション状態変数
         let currentTab = 'capture';
         let rawImage = null;
         let stream = null;
@@ -364,8 +423,13 @@
         let availableVideoDevices = [];
         let currentDeviceIndex = 0;
         let displayMode = 'bp';
+        let currentAspectRatio = '1:1';
 
-        // Zoom State Variables
+        // 表示切替フラグ
+        let showGuideLines = true;
+        let showBandLabels = true;
+
+        // ズーム関連変数
         let currentZoom = 1.0;
         let minZoom = 1.0;
         let maxZoom = 3.0;
@@ -374,16 +438,18 @@
         let initialPinchDistance = null;
         let initialPinchZoom = 1.0;
 
-        const mainCanvas = document.getElementById('main-canvas');
-        const mainCtx = mainCanvas.getContext('2d');
+        // DOM要素参照 (initAppで取得)
+        let mainCanvas = null;
+        let mainCtx = null;
+        let video = null;
+        let gelGuide = null;
 
+        // 作業用オフスクリーンキャンバス
         const baseCanvas = document.createElement('canvas');
         const workingCanvas = document.createElement('canvas');
 
-        const video = document.getElementById('video');
-        const gelGuide = document.getElementById('gel-guide');
+        // ガイド・頂点・操作パラメータ
         let gelGuideVisible = false;
-
         let corners = [
             { x: 0.15, y: 0.15 },
             { x: 0.85, y: 0.15 },
@@ -392,7 +458,10 @@
         ];
         let draggingCornerIndex = -1;
 
+        // 解析調整用パラメータ
         let wellYRatio = 0.10;
+        let laneOffsetX = 0;
+        let lanePitchAdj = 100;
         let laneCount = 6;
         let peakSensitivity = 25;
         let detectedLanes = [];
@@ -400,32 +469,218 @@
         let calibrationSpline = null;
         let calibrationChart = null;
 
+        function loadDemoSampleGelImage() {
+            const demoCanvas = document.createElement('canvas');
+            const w = 700, h = 700;
+            demoCanvas.width = w;
+            demoCanvas.height = h;
+            const dCtx = demoCanvas.getContext('2d');
+
+            // 1. 暗い背景とトレイの微小な傷・反射ノイズ
+            dCtx.fillStyle = '#050704';
+            dCtx.fillRect(0, 0, w, h);
+
+            dCtx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+            dCtx.lineWidth = 1;
+            for (let i = 0; i < 40; i++) {
+                dCtx.beginPath();
+                const sx = Math.random() * w, sy = Math.random() * h;
+                dCtx.moveTo(sx, sy);
+                dCtx.lineTo(sx + (Math.random() - 0.5) * 80, sy + (Math.random() - 0.5) * 80);
+                dCtx.stroke();
+            }
+
+            // 2. アッパーライトの蛍光反射光（上部のアーチ状グロー）
+            const topGrad = dCtx.createRadialGradient(w / 2, 70, 20, w / 2, 80, 280);
+            topGrad.addColorStop(0, 'rgba(200, 160, 255, 0.45)');
+            topGrad.addColorStop(0.4, 'rgba(120, 90, 180, 0.2)');
+            topGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            dCtx.fillStyle = topGrad;
+            dCtx.fillRect(0, 0, w, h);
+
+            // 3. アガロースゲル本体
+            dCtx.save();
+            dCtx.translate(w / 2 + 5, h / 2 + 15);
+            dCtx.rotate(0.8 * Math.PI / 180);
+
+            const gelW = 430, gelH = 490;
+            const gelGrad = dCtx.createLinearGradient(-gelW/2, -gelH/2, gelW/2, gelH/2);
+            gelGrad.addColorStop(0, '#535606');
+            gelGrad.addColorStop(0.5, '#686a08');
+            gelGrad.addColorStop(1, '#4a4d04');
+            dCtx.fillStyle = gelGrad;
+            dCtx.fillRect(-gelW / 2, -gelH / 2, gelW, gelH);
+
+            dCtx.strokeStyle = '#7c800a';
+            dCtx.lineWidth = 1.5;
+            dCtx.strokeRect(-gelW / 2, -gelH / 2, gelW, gelH);
+
+            // 4. 6つのウェル（泳動穴）
+            const numLanes = 6;
+            const startX = -gelW / 2 + 42;
+            const pitch = (gelW - 75) / (numLanes - 1);
+            const wellY = -gelH / 2 + 35;
+
+            for (let i = 0; i < numLanes; i++) {
+                const lx = startX + i * pitch;
+                dCtx.fillStyle = '#2d2e03';
+                dCtx.fillRect(lx - 16, wellY - 4, 32, 7);
+                dCtx.strokeStyle = '#717508';
+                dCtx.lineWidth = 1;
+                dCtx.strokeRect(lx - 16, wellY - 4, 32, 7);
+            }
+
+            // 5. バンド描画内部ヘルパー
+            const drawRealBand = (lx, ly, width, height, intensity) => {
+                dCtx.save();
+                dCtx.shadowColor = '#d4ff00';
+                dCtx.shadowBlur = intensity / 2.5;
+
+                const alpha = intensity / 100;
+                const bGrad = dCtx.createLinearGradient(lx - width/2, ly - height/2, lx + width/2, ly + height/2);
+                bGrad.addColorStop(0, `rgba(240, 255, 140, ${alpha})`);
+                bGrad.addColorStop(0.5, `rgba(220, 255, 70, ${alpha})`);
+                bGrad.addColorStop(1, `rgba(190, 245, 30, ${alpha})`);
+
+                dCtx.fillStyle = bGrad;
+                dCtx.beginPath();
+                dCtx.roundRect(lx - width / 2, ly - height / 2, width, height, 2);
+                dCtx.fill();
+                dCtx.restore();
+            };
+
+            const minLog = Math.log10(100);
+            const maxLog = Math.log10(1500);
+            const getRfFromBp = (bp) => {
+                const logVal = Math.log10(bp);
+                const norm = (maxLog - logVal) / (maxLog - minLog);
+                return 0.15 + norm * 0.67;
+            };
+
+            // レーン1：正確な12本のラダーマーカー
+            NACALAI_100BP_SPECS.forEach((spec) => {
+                const rf = getRfFromBp(spec.bp);
+                const ly = wellY + 30 + rf * (gelH - 100);
+                const isRef = spec.ref === true;
+                drawRealBand(startX, ly, 26, isRef ? 5.5 : 4.0, isRef ? 98 : 78);
+            });
+
+            const getRandomBp = () => 110 + Math.random() * (1400 - 110);
+
+            // レーン2〜6：ランダムなサンプルバンド (1〜2個, 重なり防止)
+            for (let i = 1; i < numLanes; i++) {
+                const lx = startX + pitch * i;
+                const numBands = Math.random() > 0.5 ? 2 : 1;
+                
+                let bp1 = getRandomBp();
+                let rf1 = getRfFromBp(bp1);
+                drawRealBand(lx, wellY + 30 + rf1 * (gelH - 100), 28, 5.0 + Math.random() * 2, 85 + Math.random() * 15);
+
+                if (numBands === 2) {
+                    let bp2 = getRandomBp();
+                    let rf2 = getRfFromBp(bp2);
+                    while (Math.abs(rf1 - rf2) < 0.08) {
+                        bp2 = getRandomBp();
+                        rf2 = getRfFromBp(bp2);
+                    }
+                    drawRealBand(lx, wellY + 30 + rf2 * (gelH - 100), 28, 5.0 + Math.random() * 2, 85 + Math.random() * 15);
+                }
+            }
+
+            dCtx.restore();
+
+            const img = new Image();
+            img.onload = () => loadRawImage(img, "ランダム生成ゲル (練習用)");
+            img.src = demoCanvas.toDataURL('image/png');
+        }
+
         function setDisplayMode(mode) {
             displayMode = mode;
             const btnBp = document.getElementById('btn-show-bp');
             const btnBoth = document.getElementById('btn-show-both');
             if (btnBp && btnBoth) {
                 if (mode === 'bp') {
-                    btnBp.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
-                    btnBoth.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
+                    btnBp.className = "px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-600 text-white shadow";
+                    btnBoth.className = "px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-200";
                 } else {
-                    btnBoth.className = "px-2.5 py-1 text-[11px] font-bold rounded bg-emerald-600 text-white shadow";
-                    btnBp.className = "px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-gray-200";
+                    btnBoth.className = "px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-600 text-white shadow";
+                    btnBp.className = "px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-200";
                 }
             }
             renderAll();
         }
 
-        async function startCamera() {
-            const badge = document.getElementById('camera-status-badge');
-            
+        function toggleGuideLines() {
+            showGuideLines = !showGuideLines;
+            const btn = document.getElementById('btn-toggle-guides');
+            if (btn) {
+                if (showGuideLines) {
+                    btn.className = "py-1.5 px-2 text-[11px] font-bold rounded-lg bg-emerald-600 text-white shadow flex items-center justify-center space-x-1";
+                    btn.innerHTML = `<i class="fa-solid fa-border-top-left"></i><span>ガイド線: ON</span>`;
+                } else {
+                    btn.className = "py-1.5 px-2 text-[11px] font-bold rounded-lg bg-gray-800 text-gray-400 border border-gray-700 flex items-center justify-center space-x-1";
+                    btn.innerHTML = `<i class="fa-solid fa-border-none"></i><span>ガイド線: OFF</span>`;
+                }
+            }
+            renderAll();
+        }
+
+        function toggleBandLabels() {
+            showBandLabels = !showBandLabels;
+            const btn = document.getElementById('btn-toggle-labels');
+            if (btn) {
+                if (showBandLabels) {
+                    btn.className = "py-1.5 px-2 text-[11px] font-bold rounded-lg bg-emerald-600 text-white shadow flex items-center justify-center space-x-1";
+                    btn.innerHTML = `<i class="fa-solid fa-tags"></i><span>バンド注釈: ON</span>`;
+                } else {
+                    btn.className = "py-1.5 px-2 text-[11px] font-bold rounded-lg bg-gray-800 text-gray-400 border border-gray-700 flex items-center justify-center space-x-1";
+                    btn.innerHTML = `<i class="fa-solid fa-tag"></i><span>バンド注釈: OFF</span>`;
+                }
+            }
+            renderAll();
+        }
+
+        function cycleAspectRatio() {
+            const frame = document.getElementById('viewfinder-frame');
+            const label = document.getElementById('aspect-ratio-label');
+            if (!frame) return;
+
+            if (currentAspectRatio === '1:1') {
+                currentAspectRatio = '4:3';
+                frame.className = "relative w-full aspect-[4/3] max-h-[50vh] flex items-center justify-center overflow-hidden rounded-lg border-2 border-emerald-500/40 shadow-inner";
+                if (label) label.innerText = "4:3";
+            } else if (currentAspectRatio === '4:3') {
+                currentAspectRatio = '16:9';
+                frame.className = "relative w-full aspect-[9/16] max-h-[50vh] flex items-center justify-center overflow-hidden rounded-lg border-2 border-emerald-500/40 shadow-inner";
+                if (label) label.innerText = "16:9";
+            } else {
+                currentAspectRatio = '1:1';
+                frame.className = "relative w-full aspect-square max-h-[50vh] flex items-center justify-center overflow-hidden rounded-lg border-2 border-emerald-500/40 shadow-inner";
+                if (label) label.innerText = "1:1";
+            }
+        }
+
+        function stopCamera() {
             if (stream) {
                 stream.getTracks().forEach(t => t.stop());
+                stream = null;
             }
+            videoTrack = null;
+            
+            const badge = document.getElementById('camera-status-badge');
+            if (badge) {
+                badge.className = "px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-gray-800 text-gray-400 border border-gray-700";
+                badge.innerHTML = `<i class="fa-solid fa-video-slash mr-1"></i>カメラ停止中`;
+            }
+        }
+
+        async function startCamera() {
+            const badge = document.getElementById('camera-status-badge');
+            stopCamera();
 
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 if (badge) {
-                    badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
+                    badge.className = "px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
                     badge.innerHTML = `<i class="fa-solid fa-folder-open mr-1"></i>ファイル読込モード`;
                 }
                 return;
@@ -460,16 +715,7 @@
 
             const constraintsLoose = {
                 audio: false,
-                video: {
-                    facingMode: activeFacingMode,
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
-                }
-            };
-
-            const constraintsBasic = {
-                audio: false,
-                video: true
+                video: { facingMode: activeFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } }
             };
 
             try {
@@ -481,11 +727,11 @@
                     handleCameraSuccess(stream, badge);
                 } catch (err2) {
                     try {
-                        stream = await navigator.mediaDevices.getUserMedia(constraintsBasic);
+                        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
                         handleCameraSuccess(stream, badge);
                     } catch (fallbackErr) {
                         if (badge) {
-                            badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
+                            badge.className = "px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30";
                             badge.innerHTML = `<i class="fa-solid fa-folder-open mr-1"></i>ファイル選択モード`;
                         }
                     }
@@ -495,8 +741,10 @@
 
         function handleCameraSuccess(s, badge) {
             stream = s;
-            video.srcObject = s;
-            video.classList.remove('hidden');
+            if (video) {
+                video.srcObject = s;
+                video.classList.remove('hidden');
+            }
 
             const videoTracks = s.getVideoTracks();
             if (videoTracks.length > 0) {
@@ -504,19 +752,21 @@
                 checkHardwareZoomSupport();
             }
 
-            video.play().then(() => {
-                if (badge) {
-                    badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-                    badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
-                }
-                const label = document.getElementById('image-source-label');
-                if (label) label.innerHTML = `<i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ起動中`;
-            }).catch(e => {
-                if (badge) {
-                    badge.className = "px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
-                    badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
-                }
-            });
+            if (video) {
+                video.play().then(() => {
+                    if (badge) {
+                        badge.className = "px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                        badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
+                    }
+                    const label = document.getElementById('image-source-label');
+                    if (label) label.innerHTML = `<i class="fa-solid fa-video mr-1 text-emerald-400"></i>ファインダー`;
+                }).catch(e => {
+                    if (badge) {
+                        badge.className = "px-2.5 py-0.5 text-[11px] font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+                        badge.innerHTML = `<i class="fa-solid fa-video mr-1"></i>カメラ稼働中`;
+                    }
+                });
+            }
         }
 
         function checkHardwareZoomSupport() {
@@ -537,10 +787,6 @@
                 }
             }
 
-            if (!hasHardwareZoom) {
-                minZoom = 1.0;
-            }
-
             const slider = document.getElementById('zoom-slider');
             if (slider) {
                 slider.min = minZoom;
@@ -549,21 +795,12 @@
                 slider.value = currentZoom;
             }
 
-            const btn05 = document.getElementById('btn-zoom-05');
-            if (btn05) {
-                if (minZoom < 1.0) {
-                    btn05.classList.remove('hidden');
-                } else {
-                    btn05.classList.add('hidden');
-                }
-            }
-
             const badge = document.getElementById('zoom-type-badge');
             if (badge) {
                 badge.innerText = hasHardwareZoom ? "OPTICAL" : "DIGITAL";
                 badge.className = hasHardwareZoom 
-                    ? "text-[9px] px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold" 
-                    : "text-[9px] px-1 py-0.2 rounded bg-gray-800 text-gray-400 font-bold";
+                    ? "text-[8px] px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold" 
+                    : "text-[8px] px-1 py-0.2 rounded bg-gray-800 text-gray-400 font-bold";
             }
 
             applyZoom(currentZoom);
@@ -578,31 +815,28 @@
             const slider = document.getElementById('zoom-slider');
             if (slider) slider.value = currentZoom;
 
-            if (hasHardwareZoom && videoTrack) {
-                try {
-                    videoTrack.applyConstraints({ advanced: [{ zoom: currentZoom }] }).catch(() => {
+            if (video) {
+                if (hasHardwareZoom && videoTrack) {
+                    try {
+                        videoTrack.applyConstraints({ advanced: [{ zoom: currentZoom }] }).catch(() => {
+                            video.style.transform = `scale(${Math.max(1.0, currentZoom)})`;
+                        });
+                        video.style.transform = 'scale(1)';
+                    } catch (e) {
                         video.style.transform = `scale(${Math.max(1.0, currentZoom)})`;
-                    });
-                    video.style.transform = 'scale(1)';
-                } catch (e) {
+                    }
+                } else {
                     video.style.transform = `scale(${Math.max(1.0, currentZoom)})`;
+                    video.style.transformOrigin = 'center center';
                 }
-            } else {
-                video.style.transform = `scale(${Math.max(1.0, currentZoom)})`;
-                video.style.transformOrigin = 'center center';
             }
         }
 
-        function onZoomSliderInput(val) {
-            applyZoom(val);
-        }
-
-        function setZoom(val) {
-            applyZoom(val);
-        }
+        function onZoomSliderInput(val) { applyZoom(val); }
+        function setZoom(val) { applyZoom(val); }
 
         function setupPinchToZoom() {
-            const container = document.getElementById('live-container');
+            const container = document.getElementById('viewfinder-frame');
             if (!container) return;
 
             container.addEventListener('touchstart', (e) => {
@@ -627,10 +861,29 @@
             }, { passive: true });
 
             container.addEventListener('touchend', (e) => {
-                if (e.touches.length < 2) {
-                    initialPinchDistance = null;
-                }
+                if (e.touches.length < 2) initialPinchDistance = null;
             }, { passive: true });
+        }
+
+        function setupTapToFocus() {
+            const container = document.getElementById('viewfinder-frame');
+            const ring = document.getElementById('focus-ring');
+            if (!container || !ring) return;
+
+            container.addEventListener('click', (e) => {
+                if (e.target.closest('#zoom-control-box')) return;
+
+                const rect = container.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                ring.style.left = `${x - 24}px`;
+                ring.style.top = `${y - 24}px`;
+
+                ring.classList.remove('focus-ring-anim');
+                void ring.offsetWidth;
+                ring.classList.add('focus-ring-anim');
+            });
         }
 
         function switchCameraMode() {
@@ -642,9 +895,7 @@
             startCamera();
         }
 
-        function restartCamera() {
-            startCamera();
-        }
+        function restartCamera() { startCamera(); }
 
         function switchTab(tabName) {
             currentTab = tabName;
@@ -653,38 +904,68 @@
                 const panel = document.getElementById(`panel-${t}`);
                 if (btn && panel) {
                     if (t === tabName) {
-                        btn.className = "py-3 px-3 border-b-2 border-emerald-500 text-emerald-400 flex items-center space-x-1.5";
+                        btn.className = "py-2.5 px-3 border-b-2 border-emerald-500 text-emerald-400 flex items-center space-x-1.5";
                         panel.classList.remove('hidden');
                         panel.classList.add('flex');
                     } else {
-                        btn.className = "py-3 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5";
+                        btn.className = "py-2.5 px-3 border-b-2 border-transparent text-gray-400 hover:text-gray-200 flex items-center space-x-1.5";
                         panel.classList.add('hidden');
                         panel.classList.remove('flex');
                     }
                 }
             });
+
+            if (tabName === 'capture') {
+                if (!rawImage && !stream) startCamera();
+            } else {
+                stopCamera();
+            }
+
             renderAll();
         }
 
         function takeSnapshot() {
-            if (!video.videoWidth) return;
-            const temp = document.createElement('canvas');
+            if (!video || !video.videoWidth || !video.videoHeight) return;
+
+            const frame = document.getElementById('viewfinder-frame');
+            if (!frame) return;
+
             const vw = video.videoWidth;
             const vh = video.videoHeight;
-            temp.width = vw;
-            temp.height = vh;
+            const frameRect = frame.getBoundingClientRect();
+
+            const targetRatio = frameRect.width / frameRect.height;
+            const videoRatio = vw / vh;
+
+            let renderW, renderH, cropX, cropY;
+
+            if (videoRatio > targetRatio) {
+                renderH = vh;
+                renderW = vh * targetRatio;
+                cropX = (vw - renderW) / 2;
+                cropY = 0;
+            } else {
+                renderW = vw;
+                renderH = vw / targetRatio;
+                cropX = 0;
+                cropY = (vh - renderH) / 2;
+            }
+
+            if (!hasHardwareZoom && currentZoom > 1.0) {
+                const scaledW = renderW / currentZoom;
+                const scaledH = renderH / currentZoom;
+                cropX += (renderW - scaledW) / 2;
+                cropY += (renderH - scaledH) / 2;
+                renderW = scaledW;
+                renderH = scaledH;
+            }
+
+            const temp = document.createElement('canvas');
+            temp.width = Math.round(renderW);
+            temp.height = Math.round(renderH);
             const ctx = temp.getContext('2d');
 
-            if (hasHardwareZoom || currentZoom === 1.0) {
-                ctx.drawImage(video, 0, 0, vw, vh);
-            } else {
-                const cropWidth = vw / currentZoom;
-                const cropHeight = vh / currentZoom;
-                const cropX = (vw - cropWidth) / 2;
-                const cropY = (vh - cropHeight) / 2;
-
-                ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, vw, vh);
-            }
+            ctx.drawImage(video, cropX, cropY, renderW, renderH, 0, 0, temp.width, temp.height);
 
             const img = new Image();
             img.onload = () => loadRawImage(img, "撮影画像");
@@ -712,10 +993,10 @@
             const overlay = document.getElementById('drag-drop-overlay');
 
             ['dragenter', 'dragover'].forEach(name => {
-                dropArea.addEventListener(name, (e) => { e.preventDefault(); overlay.classList.remove('hidden'); }, false);
+                dropArea.addEventListener(name, (e) => { e.preventDefault(); if (overlay) overlay.classList.remove('hidden'); }, false);
             });
             ['dragleave', 'drop'].forEach(name => {
-                dropArea.addEventListener(name, (e) => { e.preventDefault(); overlay.classList.add('hidden'); }, false);
+                dropArea.addEventListener(name, (e) => { e.preventDefault(); if (overlay) overlay.classList.add('hidden'); }, false);
             });
             dropArea.addEventListener('drop', (e) => {
                 if (e.dataTransfer.files.length > 0) processImageFile(e.dataTransfer.files[0]);
@@ -727,12 +1008,18 @@
             setCenterFocusCorners();
             updateBaseImageCanvas();
 
-            video.classList.add('hidden');
-            document.getElementById('live-container').classList.add('hidden');
-            document.getElementById('canvas-container').classList.remove('hidden');
+            if (video) video.classList.add('hidden');
+            const liveContainer = document.getElementById('live-container');
+            if (liveContainer) liveContainer.classList.add('hidden');
+            
+            const canvasContainer = document.getElementById('canvas-container');
+            if (canvasContainer) canvasContainer.classList.remove('hidden');
 
-            document.getElementById('image-source-label').innerHTML = `<i class="fa-solid fa-file-image mr-1 text-emerald-400"></i>${nameLabel}`;
-            document.getElementById('reset-img-btn').classList.remove('hidden');
+            const srcLabel = document.getElementById('image-source-label');
+            if (srcLabel) srcLabel.innerHTML = `<i class="fa-solid fa-file-image mr-1 text-emerald-400"></i>${nameLabel}`;
+            
+            const resetBtn = document.getElementById('reset-img-btn');
+            if (resetBtn) resetBtn.classList.remove('hidden');
 
             switchTab('transform');
             runThreeStepGelPipeline();
@@ -749,7 +1036,7 @@
         }
 
         function updateBaseImageCanvas() {
-            if (!rawImage) return;
+            if (!rawImage || !mainCanvas) return;
             baseCanvas.width = rawImage.width;
             baseCanvas.height = rawImage.height;
             const ctx = baseCanvas.getContext('2d');
@@ -1084,14 +1371,20 @@
 
         function updateAnalysisParams() {
             wellYRatio = parseInt(document.getElementById('slider-well-y').value) / 100;
+            laneOffsetX = parseInt(document.getElementById('slider-lane-offset-x')?.value || 0);
+            lanePitchAdj = parseInt(document.getElementById('slider-lane-pitch-adj')?.value || 100);
             laneCount = parseInt(document.getElementById('slider-lane-count').value);
             peakSensitivity = parseInt(document.getElementById('slider-band-sens').value);
 
             const elWellY = document.getElementById('val-well-y');
+            const elOffsetX = document.getElementById('val-lane-offset-x');
+            const elPitchAdj = document.getElementById('val-lane-pitch-adj');
             const elLaneCount = document.getElementById('val-lane-count');
             const elBandSens = document.getElementById('val-band-sens');
 
             if (elWellY) elWellY.innerText = `${Math.round(wellYRatio * 100)}%`;
+            if (elOffsetX) elOffsetX.innerText = `${laneOffsetX > 0 ? '+' : ''}${laneOffsetX}px`;
+            if (elPitchAdj) elPitchAdj.innerText = `${lanePitchAdj}%`;
             if (elLaneCount) elLaneCount.innerText = laneCount;
             if (elBandSens) elBandSens.innerText = peakSensitivity;
 
@@ -1109,77 +1402,78 @@
             const startY = Math.round(h * wellYRatio);
             const scanHeight = Math.max(50, h - startY);
 
-            // 1. Precise Marker Line L1 Centroid Alignment
-            const l1EstX = Math.round(w * 0.115);
-            const l1SearchRange = Math.round(w * 0.05);
+            // 1. ウェル黒影（凹み領域）の自動水平スキャン解析
+            const wellScanY = Math.round(h * wellYRatio);
+            const wellScanRadius = Math.max(2, Math.round(h * 0.012));
 
-            let l1CentroidSumX = 0;
-            let l1CentroidCount = 0;
-
-            for (let y = startY + 25; y < h - 20; y += 3) {
-                let maxLum = -1;
-                let maxLumX = l1EstX;
-                let minBg = Infinity;
-
-                for (let x = Math.max(0, l1EstX - l1SearchRange); x <= Math.min(w - 1, l1EstX + l1SearchRange); x++) {
-                    const idx = (y * w + x) * 4;
-                    const gLum = imgData[idx + 1];
-                    if (gLum < minBg) minBg = gLum;
-                    if (gLum > maxLum) { maxLum = gLum; maxLumX = x; }
+            const horizProfile = new Float32Array(w);
+            for (let x = 0; x < w; x++) {
+                let sumVal = 0, count = 0;
+                for (let dy = -wellScanRadius; dy <= wellScanRadius; dy++) {
+                    const py = Math.max(0, Math.min(h - 1, wellScanY + dy));
+                    const idx = (py * w + x) * 4;
+                    const lum = imgData[idx] * 0.3 + imgData[idx + 1] * 0.7;
+                    sumVal += lum;
+                    count++;
                 }
-
-                if (maxLum - minBg > 15) {
-                    let leftB = maxLumX, rightB = maxLumX;
-                    const halfVal = minBg + (maxLum - minBg) * 0.5;
-                    while (leftB > Math.max(0, l1EstX - l1SearchRange) && imgData[(y * w + leftB) * 4 + 1] > halfVal) leftB--;
-                    while (rightB < Math.min(w - 1, l1EstX + l1SearchRange) && imgData[(y * w + rightB) * 4 + 1] > halfVal) rightB++;
-
-                    l1CentroidSumX += (leftB + rightB) / 2;
-                    l1CentroidCount++;
-                }
+                horizProfile[x] = count > 0 ? sumVal / count : 0;
             }
 
-            const centerX_L1 = l1CentroidCount > 0 ? Math.round(l1CentroidSumX / l1CentroidCount) : l1EstX;
+            // 初期位置の予測スパン
+            const baseMarginL = w * 0.098;
+            const baseSpan = w * (1 - 0.098 - 0.077);
+            const basePitch = (baseSpan / Math.max(1, laneCount - 1)) * (lanePitchAdj / 100);
 
-            // 2. High-precision Pitch Optimization
-            let bestPitch = w * 0.154;
-            let maxTotalPeak = -1;
+            const detectedShadowCenters = [];
 
-            for (let pTest = w * 0.148; pTest <= w * 0.158; pTest += w * 0.0002) {
-                let currentScore = 0;
-                for (let l = 1; l <= Math.min(4, laneCount - 1); l++) {
-                    const testX = Math.round(centerX_L1 + l * pTest);
-                    if (testX < 10 || testX >= w - 10) continue;
-                    
-                    let maxVal = 0;
-                    for (let y = startY + 20; y < h - 20; y += 2) {
-                        const idx = (y * w + testX) * 4;
-                        const gVal = imgData[idx + 1];
-                        if (gVal > maxVal) maxVal = gVal;
+            for (let k = 0; k < laneCount; k++) {
+                const estX = baseMarginL + k * basePitch + laneOffsetX;
+                const searchR = Math.round(basePitch * 0.38);
+
+                let minLum = Infinity;
+                for (let x = Math.max(0, Math.round(estX - searchR)); x <= Math.min(w - 1, Math.round(estX + searchR)); x++) {
+                    if (horizProfile[x] < minLum) minLum = horizProfile[x];
+                }
+
+                const darkThreshold = minLum + 12;
+                let darkSumX = 0, darkCount = 0;
+
+                for (let x = Math.max(0, Math.round(estX - searchR)); x <= Math.min(w - 1, Math.round(estX + searchR)); x++) {
+                    if (horizProfile[x] <= darkThreshold) {
+                        darkSumX += x;
+                        darkCount++;
                     }
-                    currentScore += maxVal;
                 }
-                
-                if (currentScore > maxTotalPeak) {
-                    maxTotalPeak = currentScore;
-                    bestPitch = pTest;
-                }
+
+                const shadowX = darkCount > 0 ? (darkSumX / darkCount) : estX;
+                detectedShadowCenters.push({ k: k, x: shadowX });
             }
 
-            let fittedPitch = Math.max(w * 0.10, Math.min(w * 0.25, bestPitch));
-
-            const refinedLaneCenters = [centerX_L1];
-            for (let k = 1; k < laneCount; k++) {
-                refinedLaneCenters.push(Math.round(centerX_L1 + k * fittedPitch));
+            // 暗い影スロットの中心線フィッティング計算
+            let sumK = 0, sumX = 0, sumKX = 0, sumK2 = 0;
+            const n = detectedShadowCenters.length;
+            for (let p of detectedShadowCenters) {
+                sumK += p.k;
+                sumX += p.x;
+                sumKX += p.k * p.x;
+                sumK2 += p.k * p.k;
             }
 
-            // 3. Peak Profiles Extraction & Noise Filtering
+            const fittedPitch = (n * sumKX - sumK * sumX) / (n * sumK2 - sumK * sumK || 1);
+            const fittedL1 = (sumX - fittedPitch * sumK) / n;
+
+            const refinedLaneCenters = [];
+            for (let k = 0; k < laneCount; k++) {
+                refinedLaneCenters.push(Math.round(fittedL1 + k * fittedPitch));
+            }
+
+            // 2. ピークプロファイル抽出とノイズフィルタリング
             detectedLanes = [];
 
             for (let l = 0; l < laneCount; l++) {
                 const centerX = refinedLaneCenters[l];
-                const laneXMin = Math.max(0, Math.round(centerX - fittedPitch * 0.25));
-                const laneXMax = Math.min(w - 1, Math.round(centerX + fittedPitch * 0.25));
+                const laneXMin = Math.max(0, Math.round(centerX - fittedPitch * 0.28));
+                const laneXMax = Math.min(w - 1, Math.round(centerX + fittedPitch * 0.28));
 
                 const profileRaw = new Float32Array(scanHeight);
                 for (let y = 0; y < scanHeight; y++) {
@@ -1193,7 +1487,7 @@
                     profileRaw[y] = count > 0 ? intensitySum / count : 0;
                 }
 
-                // Rolling Ball Background Subtraction
+                // 背景控除 (ローリングボール)
                 const ballRadius = 20;
                 const bgLine = new Float32Array(scanHeight);
                 for (let i = 0; i < scanHeight; i++) {
@@ -1248,7 +1542,7 @@
                     }
                 }
 
-                // Minimal 3px merging
+                // マージ処理
                 const mergedPeaks = [];
                 peaks.sort((a, b) => a.y - b.y);
                 for (let p of peaks) {
@@ -1264,7 +1558,6 @@
                     }
                 }
 
-                // Sample Lanes Relative Peak Noise Filtering
                 let finalPeaks = mergedPeaks;
                 if (l > 0 && mergedPeaks.length > 0) {
                     const maxLanePeak = Math.max(...mergedPeaks.map(p => p.peakIntensity));
@@ -1279,14 +1572,8 @@
             }
 
             ladderLaneIndex = 0;
-            const titleEl = document.getElementById('ladder-status-title');
-            const descEl = document.getElementById('ladder-status-desc');
-            if (titleEl) titleEl.innerText = `マーカー12本完全同定成功`;
-            if (descEl) descEl.innerText = `全12本のバンド（1500bp〜100bp）を「ナカライ 100bp DNA Ladder One」に完全バインドしました。`;
-
             buildCalibrationModel();
             estimateSampleBands();
-            renderCalibrationChart();
             populateBandsTable();
             renderAll();
         }
@@ -1430,89 +1717,6 @@
             });
         }
 
-        function renderCalibrationChart() {
-            const chartCanvas = document.getElementById('calibrationChart');
-            if (!chartCanvas) return;
-            const chartCtx = chartCanvas.getContext('2d');
-
-            if (calibrationChart) {
-                try { calibrationChart.destroy(); } catch(e) {}
-            }
-
-            const ladderPeaks = detectedLanes[ladderLaneIndex]?.peaks || [];
-            const dataPoints = ladderPeaks.filter(p => p.bp && !isNaN(p.rf) && !isNaN(p.bp)).map(p => ({ x: p.rf, y: p.bp }));
-
-            const curvePoints = [];
-            if (calibrationSpline) {
-                for (let rf = 0.05; rf <= 0.98; rf += 0.02) {
-                    const val = calibrationSpline(rf);
-                    if (!isNaN(val) && val > 0) {
-                        curvePoints.push({ x: parseFloat(rf.toFixed(2)), y: val });
-                    }
-                }
-            }
-
-            try {
-                calibrationChart = new Chart(chartCtx, {
-                    type: 'scatter',
-                    data: {
-                        datasets: [
-                            {
-                                label: 'ラダーマーカー (12本)',
-                                data: dataPoints,
-                                backgroundColor: '#10b981',
-                                borderColor: '#ffffff',
-                                borderWidth: 1.5,
-                                pointRadius: 4
-                            },
-                            {
-                                label: '単調3次スプライン検量線',
-                                data: curvePoints,
-                                type: 'line',
-                                borderColor: '#3b82f6',
-                                borderWidth: 2,
-                                fill: false,
-                                tension: 0,
-                                pointRadius: 0
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            x: {
-                                type: 'linear',
-                                min: 0,
-                                max: 1.0,
-                                title: { display: true, text: '相対移動度 (Rf)', color: '#9ca3af', font: { size: 9 } },
-                                grid: { color: '#1e293b' },
-                                ticks: { color: '#9ca3af', font: { size: 8 } }
-                            },
-                            y: {
-                                type: 'logarithmic',
-                                min: 50,
-                                max: 2000,
-                                title: { display: true, text: '塩基長 (bp)', color: '#9ca3af', font: { size: 9 } },
-                                grid: { color: '#1e293b' },
-                                ticks: { 
-                                    color: '#9ca3af', 
-                                    font: { size: 8 },
-                                    callback: function(value) {
-                                        return [100, 200, 300, 400, 500, 700, 1000, 1500].includes(value) ? value + ' bp' : null;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            } catch (err) {
-                console.warn("Chart rendering notice:", err);
-            }
-        }
-
         function populateBandsTable() {
             const tbody = document.getElementById('band-results-tbody');
             if (!tbody) return;
@@ -1542,7 +1746,7 @@
         }
 
         function renderAll() {
-            if (!workingCanvas.width) return;
+            if (!mainCanvas || !mainCtx || !workingCanvas.width) return;
 
             mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
             mainCtx.drawImage(workingCanvas, 0, 0);
@@ -1582,157 +1786,167 @@
                 });
             } else if (currentTab === 'analysis' || currentTab === 'report') {
                 const wellY = h * wellYRatio;
-                mainCtx.beginPath();
-                mainCtx.moveTo(0, wellY);
-                mainCtx.lineTo(w, wellY);
-                mainCtx.strokeStyle = '#ef4444';
-                mainCtx.lineWidth = 2;
-                mainCtx.setLineDash([6, 4]);
-                mainCtx.stroke();
-                mainCtx.setLineDash([]);
 
-                mainCtx.font = 'bold 12px sans-serif';
-                mainCtx.fillStyle = '#ef4444';
-                mainCtx.fillText('泳動起点 (Well Line)', 10, wellY - 6);
-
-                detectedLanes.forEach(lane => {
-                    const x = lane.centerX;
-                    const isLadder = lane.index === ladderLaneIndex;
-
+                // 1. ガイド線の描画 (showGuideLines が true の場合のみ)
+                if (showGuideLines) {
                     mainCtx.beginPath();
-                    mainCtx.moveTo(x, wellY);
-                    mainCtx.lineTo(x, h);
-                    mainCtx.strokeStyle = isLadder ? 'rgba(245, 158, 11, 0.4)' : 'rgba(59, 130, 246, 0.3)';
-                    mainCtx.lineWidth = 1.5;
+                    mainCtx.moveTo(0, wellY);
+                    mainCtx.lineTo(w, wellY);
+                    mainCtx.strokeStyle = '#ef4444';
+                    mainCtx.lineWidth = 2;
+                    mainCtx.setLineDash([6, 4]);
                     mainCtx.stroke();
+                    mainCtx.setLineDash([]);
 
-                    mainCtx.fillStyle = isLadder ? '#f59e0b' : '#3b82f6';
-                    mainCtx.fillText(`L${lane.index + 1}`, x - 8, wellY + 16);
+                    mainCtx.font = 'bold 12px sans-serif';
+                    mainCtx.fillStyle = '#ef4444';
+                    mainCtx.fillText('泳動起点 (Well Line)', 10, wellY - 6);
 
-                    if (isLadder) {
-                        const sortedLadderPeaks = [...lane.peaks].sort((a, b) => a.y - b.y);
-                        const labelYPos = [];
-                        const minSpacing = 18;
+                    detectedLanes.forEach(lane => {
+                        const x = lane.centerX;
+                        const isLadder = lane.index === ladderLaneIndex;
 
-                        sortedLadderPeaks.forEach((p, idx) => {
-                            let targetY = p.y;
-                            if (idx > 0) {
-                                const prevY = labelYPos[idx - 1];
-                                if (targetY < prevY + minSpacing) {
-                                    targetY = prevY + minSpacing;
+                        mainCtx.beginPath();
+                        mainCtx.moveTo(x, wellY);
+                        mainCtx.lineTo(x, h);
+                        mainCtx.strokeStyle = isLadder ? 'rgba(245, 158, 11, 0.4)' : 'rgba(59, 130, 246, 0.3)';
+                        mainCtx.lineWidth = 1.5;
+                        mainCtx.stroke();
+
+                        mainCtx.fillStyle = isLadder ? '#f59e0b' : '#3b82f6';
+                        mainCtx.fillText(`L${lane.index + 1}`, x - 8, wellY + 16);
+                    });
+                }
+
+                // 2. バンド検出点・数値ラベルの描画 (showBandLabels が true の場合のみ)
+                if (showBandLabels) {
+                    detectedLanes.forEach(lane => {
+                        const x = lane.centerX;
+                        const isLadder = lane.index === ladderLaneIndex;
+
+                        if (isLadder) {
+                            const sortedLadderPeaks = [...lane.peaks].sort((a, b) => a.y - b.y);
+                            const labelYPos = sortedLadderPeaks.map(p => p.y);
+                            const minSpacing = 16;
+
+                            // パス1: 上から下へ (500bp/1000bpの真横固定基準を崩さない)
+                            for (let i = 0; i < sortedLadderPeaks.length - 1; i++) {
+                                const nextBp = sortedLadderPeaks[i + 1].bp;
+                                const isNextRef = (nextBp === 1000 || nextBp === 500);
+                                if (labelYPos[i + 1] < labelYPos[i] + minSpacing) {
+                                    if (!isNextRef) {
+                                        labelYPos[i + 1] = labelYPos[i] + minSpacing;
+                                    }
                                 }
                             }
-                            labelYPos.push(targetY);
-                        });
 
-                        sortedLadderPeaks.forEach((p, idx) => {
-                            mainCtx.beginPath();
-                            mainCtx.arc(x, p.y, 4, 0, Math.PI * 2);
-                            mainCtx.fillStyle = '#f59e0b';
-                            mainCtx.fill();
+                            // パス2: 下から上へ
+                            for (let i = sortedLadderPeaks.length - 1; i > 0; i--) {
+                                const prevBp = sortedLadderPeaks[i - 1].bp;
+                                const isPrevRef = (prevBp === 1000 || prevBp === 500);
+                                if (labelYPos[i - 1] > labelYPos[i] - minSpacing) {
+                                    if (!isPrevRef) {
+                                        labelYPos[i - 1] = labelYPos[i] - minSpacing;
+                                    }
+                                }
+                            }
 
-                            if (p.bp) {
-                                const labelText = displayMode === 'both' ? `${p.bp} bp (${p.ng || 0}ng)` : `${p.bp} bp`;
-                                mainCtx.font = 'bold 12px sans-serif';
-                                const textMetrics = mainCtx.measureText(labelText);
-                                const textW = textMetrics.width;
-                                const padX = 6;
-                                const boxW = textW + padX * 2;
-
-                                const labelY = labelYPos[idx];
-                                const labelX = Math.max(10, x - boxW - 35);
+                            sortedLadderPeaks.forEach((p, idx) => {
+                                const isRefBand = (p.bp === 1000 || p.bp === 500);
 
                                 mainCtx.beginPath();
-                                mainCtx.moveTo(labelX + boxW, labelY);
-                                mainCtx.lineTo(x - 8, p.y);
-                                mainCtx.lineTo(x, p.y);
-                                mainCtx.strokeStyle = '#f59e0b';
-                                mainCtx.lineWidth = 1.2;
-                                mainCtx.stroke();
+                                mainCtx.arc(x, p.y, isRefBand ? 6 : 4, 0, Math.PI * 2);
+                                mainCtx.fillStyle = isRefBand ? '#fbbf24' : '#f59e0b';
+                                mainCtx.fill();
+                                if (isRefBand) {
+                                    mainCtx.strokeStyle = '#ffffff';
+                                    mainCtx.lineWidth = 1.5;
+                                    mainCtx.stroke();
+                                }
 
-                                mainCtx.save();
-                                mainCtx.shadowColor = '#000000';
-                                mainCtx.shadowBlur = 5;
-                                mainCtx.shadowOffsetX = 1;
-                                mainCtx.shadowOffsetY = 1;
+                                if (p.bp) {
+                                    const labelText = displayMode === 'both' ? `${p.bp} bp (${p.ng || 0}ng)` : `${p.bp} bp`;
+                                    mainCtx.font = isRefBand ? 'bold 13px sans-serif' : 'bold 11px sans-serif';
+                                    const textMetrics = mainCtx.measureText(labelText);
+                                    const textW = textMetrics.width;
+                                    const padX = 6;
+                                    const boxW = textW + padX * 2;
 
-                                mainCtx.strokeStyle = '#d97706';
-                                mainCtx.lineWidth = 3;
-                                mainCtx.lineJoin = 'round';
-                                mainCtx.strokeText(labelText, labelX, labelY + 4);
+                                    const labelY = isRefBand ? p.y : labelYPos[idx];
+                                    const labelX = Math.max(10, x - boxW - (isRefBand ? 22 : 35));
 
-                                mainCtx.fillStyle = '#ffffff';
-                                mainCtx.fillText(labelText, labelX, labelY + 4);
-                                mainCtx.restore();
-                            }
-                        });
+                                    mainCtx.beginPath();
+                                    if (isRefBand) {
+                                        mainCtx.moveTo(labelX + boxW, p.y);
+                                        mainCtx.lineTo(x - 8, p.y);
+                                    } else {
+                                        mainCtx.moveTo(labelX + boxW, labelY);
+                                        mainCtx.lineTo(x - 12, p.y);
+                                        mainCtx.lineTo(x - 4, p.y);
+                                    }
+                                    mainCtx.strokeStyle = isRefBand ? '#fbbf24' : '#f59e0b';
+                                    mainCtx.lineWidth = isRefBand ? 2.0 : 1.2;
+                                    mainCtx.stroke();
 
-                    } else {
-                        lane.peaks.forEach(p => {
-                            mainCtx.beginPath();
-                            mainCtx.arc(x, p.y, 4, 0, Math.PI * 2);
-                            mainCtx.fillStyle = '#10b981';
-                            mainCtx.fill();
+                                    mainCtx.save();
+                                    mainCtx.shadowColor = '#000000';
+                                    mainCtx.shadowBlur = 5;
+                                    mainCtx.shadowOffsetX = 1;
+                                    mainCtx.shadowOffsetY = 1;
 
-                            if (p.bp) {
-                                const badgeText = displayMode === 'both' ? `${p.bp} bp (${p.ng || 0}ng)` : `${p.bp} bp`;
-                                mainCtx.font = 'bold 12px sans-serif';
-                                const textWidth = mainCtx.measureText(badgeText).width;
+                                    mainCtx.strokeStyle = isRefBand ? '#b45309' : '#d97706';
+                                    mainCtx.lineWidth = isRefBand ? 4 : 3;
+                                    mainCtx.lineJoin = 'round';
+                                    mainCtx.strokeText(labelText, labelX, labelY + 4);
 
-                                const rectX = Math.min(w - textWidth - 14, x + 10);
+                                    mainCtx.fillStyle = isRefBand ? '#fef08a' : '#ffffff';
+                                    mainCtx.fillText(labelText, labelX, labelY + 4);
+                                    mainCtx.restore();
+                                }
+                            });
 
-                                mainCtx.save();
-                                mainCtx.shadowColor = '#000000';
-                                mainCtx.shadowBlur = 5;
-                                mainCtx.shadowOffsetX = 1;
-                                mainCtx.shadowOffsetY = 1;
+                        } else {
+                            lane.peaks.forEach(p => {
+                                mainCtx.beginPath();
+                                mainCtx.arc(x, p.y, 4, 0, Math.PI * 2);
+                                mainCtx.fillStyle = '#10b981';
+                                mainCtx.fill();
 
-                                mainCtx.strokeStyle = '#059669';
-                                mainCtx.lineWidth = 3;
-                                mainCtx.lineJoin = 'round';
-                                mainCtx.strokeText(badgeText, rectX, p.y + 4);
+                                if (p.bp) {
+                                    const badgeText = displayMode === 'both' ? `${p.bp} bp (${p.ng || 0}ng)` : `${p.bp} bp`;
+                                    mainCtx.font = 'bold 12px sans-serif';
+                                    const textWidth = mainCtx.measureText(badgeText).width;
 
-                                mainCtx.fillStyle = '#ffffff';
-                                mainCtx.fillText(badgeText, rectX, p.y + 4);
-                                mainCtx.restore();
-                            }
-                        });
-                    }
-                });
+                                    const rectX = Math.min(w - textWidth - 14, x + 10);
+
+                                    mainCtx.save();
+                                    mainCtx.shadowColor = '#000000';
+                                    mainCtx.shadowBlur = 5;
+                                    mainCtx.shadowOffsetX = 1;
+                                    mainCtx.shadowOffsetY = 1;
+
+                                    mainCtx.strokeStyle = '#059669';
+                                    mainCtx.lineWidth = 3;
+                                    mainCtx.lineJoin = 'round';
+                                    mainCtx.strokeText(badgeText, rectX, p.y + 4);
+
+                                    mainCtx.fillStyle = '#ffffff';
+                                    mainCtx.fillText(badgeText, rectX, p.y + 4);
+                                    mainCtx.restore();
+                                }
+                            });
+                        }
+                    });
+                }
             }
         }
 
-        mainCanvas.addEventListener('pointerdown', (e) => {
-            if (!rawImage) return;
+        function setupCanvasEventListeners() {
+            if (!mainCanvas) return;
 
-            const rect = mainCanvas.getBoundingClientRect();
-            const scaleX = mainCanvas.width / rect.width;
-            const scaleY = mainCanvas.height / rect.height;
+            mainCanvas.addEventListener('pointerdown', (e) => {
+                if (!rawImage) return;
 
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
-
-            if (currentTab === 'transform') {
-                const w = mainCanvas.width;
-                const h = mainCanvas.height;
-
-                for (let i = 0; i < 4; i++) {
-                    const cx = corners[i].x * w;
-                    const cy = corners[i].y * h;
-                    const dist = Math.hypot(x - cx, y - cy);
-
-                    if (dist < 35) {
-                        draggingCornerIndex = i;
-                        mainCanvas.setPointerCapture(e.pointerId);
-                        return;
-                    }
-                }
-            }
-        });
-
-        mainCanvas.addEventListener('pointermove', (e) => {
-            if (draggingCornerIndex !== -1 && currentTab === 'transform') {
-                e.preventDefault();
                 const rect = mainCanvas.getBoundingClientRect();
                 const scaleX = mainCanvas.width / rect.width;
                 const scaleY = mainCanvas.height / rect.height;
@@ -1740,19 +1954,48 @@
                 const x = (e.clientX - rect.left) * scaleX;
                 const y = (e.clientY - rect.top) * scaleY;
 
-                corners[draggingCornerIndex].x = Math.max(0, Math.min(1, x / mainCanvas.width));
-                corners[draggingCornerIndex].y = Math.max(0, Math.min(1, y / mainCanvas.height));
+                if (currentTab === 'transform') {
+                    const w = mainCanvas.width;
+                    const h = mainCanvas.height;
 
-                renderAll();
-            }
-        });
+                    for (let i = 0; i < 4; i++) {
+                        const cx = corners[i].x * w;
+                        const cy = corners[i].y * h;
+                        const dist = Math.hypot(x - cx, y - cy);
 
-        mainCanvas.addEventListener('pointerup', (e) => {
-            if (draggingCornerIndex !== -1) {
-                draggingCornerIndex = -1;
-                try { mainCanvas.releasePointerCapture(e.pointerId); } catch(err){}
-            }
-        });
+                        if (dist < 35) {
+                            draggingCornerIndex = i;
+                            mainCanvas.setPointerCapture(e.pointerId);
+                            return;
+                        }
+                    }
+                }
+            });
+
+            mainCanvas.addEventListener('pointermove', (e) => {
+                if (draggingCornerIndex !== -1 && currentTab === 'transform') {
+                    e.preventDefault();
+                    const rect = mainCanvas.getBoundingClientRect();
+                    const scaleX = mainCanvas.width / rect.width;
+                    const scaleY = mainCanvas.height / rect.height;
+
+                    const x = (e.clientX - rect.left) * scaleX;
+                    const y = (e.clientY - rect.top) * scaleY;
+
+                    corners[draggingCornerIndex].x = Math.max(0, Math.min(1, x / mainCanvas.width));
+                    corners[draggingCornerIndex].y = Math.max(0, Math.min(1, y / mainCanvas.height));
+
+                    renderAll();
+                }
+            });
+
+            mainCanvas.addEventListener('pointerup', (e) => {
+                if (draggingCornerIndex !== -1) {
+                    draggingCornerIndex = -1;
+                    try { mainCanvas.releasePointerCapture(e.pointerId); } catch(err){}
+                }
+            });
+        }
 
         function toggleGelGuide() {
             gelGuideVisible = !gelGuideVisible;
@@ -1760,29 +2003,29 @@
         }
 
         function resetImage() {
-            if (stream) {
-                const liveBox = document.getElementById('live-container');
-                if (liveBox) liveBox.classList.remove('hidden');
-                video.classList.remove('hidden');
-            }
+            rawImage = null;
+
+            const liveBox = document.getElementById('live-container');
+            if (liveBox) liveBox.classList.remove('hidden');
+            if (video) video.classList.remove('hidden');
+
             const canvasBox = document.getElementById('canvas-container');
             if (canvasBox) canvasBox.classList.add('hidden');
             
             const srcLabel = document.getElementById('image-source-label');
-            if (srcLabel) srcLabel.innerHTML = '<i class="fa-solid fa-video mr-1 text-emerald-400"></i>カメラ起動中';
+            if (srcLabel) srcLabel.innerHTML = '<i class="fa-solid fa-video mr-1 text-emerald-400"></i>ファインダー';
             
             const resetBtn = document.getElementById('reset-img-btn');
             if (resetBtn) resetBtn.classList.add('hidden');
             
-            rawImage = null;
             switchTab('capture');
         }
 
         function downloadAnnotatedImage() {
-            if (!workingCanvas.width) return;
+            if (!workingCanvas.width || !mainCanvas) return;
 
             const exportCanvas = document.createElement('canvas');
-            const headerHeight = 110;
+            const headerHeight = 130;
             const footerHeight = 160;
 
             exportCanvas.width = mainCanvas.width;
@@ -1795,17 +2038,19 @@
             const title = document.getElementById('report-title')?.value || 'Gel Analysis Result';
             const agarose = document.getElementById('report-agarose')?.value || '';
             const stain = document.getElementById('report-stain')?.value || '';
+            const location = document.getElementById('report-location')?.value || '';
             const notes = document.getElementById('report-notes')?.value || '';
             const dateStr = new Date().toLocaleString('ja-JP');
 
             eCtx.fillStyle = '#10b981';
             eCtx.font = 'bold 22px sans-serif';
-            eCtx.fillText(title, 20, 36);
+            eCtx.fillText(title, 20, 34);
 
             eCtx.fillStyle = '#cbd5e1';
             eCtx.font = '13px sans-serif';
-            eCtx.fillText(`解析日時: ${dateStr}  |  アガロース: ${agarose}  |  染色: ${stain}`, 20, 64);
-            if (notes) eCtx.fillText(`メモ: ${notes}`, 20, 88);
+            eCtx.fillText(`解析日時: ${dateStr}  |  実験場所: ${location}`, 20, 58);
+            eCtx.fillText(`アガロース濃度: ${agarose}  |  核酸染色試薬: ${stain}`, 20, 80);
+            if (notes) eCtx.fillText(`実験メモ・所感: ${notes}`, 20, 102);
 
             eCtx.drawImage(mainCanvas, 0, headerHeight);
 
@@ -1825,7 +2070,11 @@
             detectedLanes.forEach(lane => {
                 const isLadder = lane.index === ladderLaneIndex;
                 let summaryStr = `Lane ${lane.index + 1}${isLadder ? '(Ladder)' : ''}: `;
-                summaryStr += lane.peaks.map(p => `${p.bp || '?'}bp(${p.ng || '?'}ng)`).join(', ');
+                if (isLadder) {
+                    summaryStr += 'マーカーDNA';
+                } else {
+                    summaryStr += lane.peaks.map(p => `${p.bp || '?'}bp(${p.ng || '?'}ng)`).join(', ');
+                }
 
                 if (summaryStr.length > 70) summaryStr = summaryStr.substring(0, 67) + '...';
 
@@ -1843,12 +2092,23 @@
             link.click();
         }
 
-        // Onload Initialization
-        window.onload = () => {
+        // アプリケーション初期化
+        function initApp() {
+            mainCanvas = document.getElementById('main-canvas');
+            if (mainCanvas) {
+                mainCtx = mainCanvas.getContext('2d');
+                setupCanvasEventListeners();
+            }
+            video = document.getElementById('video');
+            gelGuide = document.getElementById('gel-guide');
+
             startCamera();
             setupDragAndDrop();
             setupPinchToZoom();
-        };
+            setupTapToFocus();
+        }
+
+        window.onload = initApp;
     </script>
 </body>
 </html>
