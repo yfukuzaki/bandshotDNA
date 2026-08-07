@@ -266,15 +266,48 @@
 
                 <button onclick="applyPerspectiveWarpAndStraighten()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-950 transition flex items-center justify-center space-x-2">
                     <i class="fa-solid fa-crop-simple text-lg"></i>
-                    <span>正位置切り出し・自動解析へ進む</span>
+                    <span>正位置切り出し・自動前処理へ進む</span>
                 </button>
             </div>
 
             <!-- ステップ 3 パネル：解析 -->
             <div id="panel-analysis" class="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex-col gap-3 shadow-lg hidden">
                 <h2 class="text-sm font-bold text-gray-200 flex items-center border-b border-gray-800 pb-2">
-                    <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. 解析
+                    <i class="fa-solid fa-flask-vial text-emerald-400 mr-2"></i>3. 画像前処理＆解析
                 </h2>
+
+                <!-- バックグラウンド画像前処理（モノクロ化・背景沈め・ガンマ）コントロール -->
+                <div class="bg-gradient-to-br from-emerald-950/40 to-gray-950 p-3 rounded-xl border border-emerald-500/30 space-y-2 text-xs">
+                    <div class="flex justify-between items-center border-b border-emerald-500/20 pb-1.5">
+                        <span class="font-bold text-emerald-300 flex items-center"><i class="fa-solid fa-sliders text-emerald-400 mr-1.5"></i>バックグラウンド画像強調パラメータ</span>
+                        <button onclick="resetPreProcessingParams()" class="text-[10px] text-emerald-400 hover:underline">標準に戻す</button>
+                    </div>
+
+                    <div class="flex justify-between items-center text-gray-300 pt-0.5">
+                        <span><i class="fa-solid fa-circle-half-stroke mr-1 text-emerald-400"></i>コントラスト (Contrast)</span>
+                        <span id="val-contrast" class="text-emerald-400 font-bold">140%</span>
+                    </div>
+                    <input type="range" id="slider-contrast" min="50" max="300" value="140" oninput="updatePreProcessingAndAnalysis()" class="w-full accent-emerald-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+
+                    <div class="flex justify-between items-center text-gray-300 pt-0.5">
+                        <span><i class="fa-solid fa-moon mr-1 text-cyan-400"></i>背景引き締め (Black Offset)</span>
+                        <span id="val-black-offset" class="text-cyan-400 font-bold">25</span>
+                    </div>
+                    <input type="range" id="slider-black-offset" min="0" max="100" value="25" oninput="updatePreProcessingAndAnalysis()" class="w-full accent-cyan-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+
+                    <div class="flex justify-between items-center text-gray-300 pt-0.5">
+                        <span><i class="fa-solid fa-chart-area mr-1 text-amber-400"></i>ガンマ補正 (Gamma)</span>
+                        <span id="val-gamma" class="text-amber-400 font-bold">0.80</span>
+                    </div>
+                    <input type="range" id="slider-gamma" min="0.30" max="2.00" step="0.05" value="0.80" oninput="updatePreProcessingAndAnalysis()" class="w-full accent-amber-500 h-1.5 bg-gray-800 rounded-lg cursor-pointer">
+
+                    <div class="pt-1 flex justify-between items-center">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input id="chk-green-grayscale" type="checkbox" checked onchange="updatePreProcessingAndAnalysis()" class="accent-emerald-500 w-4 h-4 rounded">
+                            <span class="text-gray-300 text-[11px] font-medium">G(緑)波長優先でモノクロ化</span>
+                        </label>
+                    </div>
+                </div>
 
                 <div class="bg-gray-950 p-3 rounded-xl border border-gray-800 space-y-2.5 text-xs">
                     <!-- 表示切替コントロールパネル -->
@@ -381,7 +414,6 @@
                     <label class="block text-gray-300 font-semibold pt-1">核酸染色試薬</label>
                     <input type="text" id="report-stain" value="Ethidium Bromide (EtBr)" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500">
 
-                    <!-- 追加：実験場所項目 -->
                     <label class="block text-gray-300 font-semibold pt-1"><i class="fa-solid fa-location-dot text-emerald-400 mr-1"></i>実験場所</label>
                     <input type="text" id="report-location" value="長浜バイオ大学・実験室" class="w-full bg-gray-900 border border-gray-700 rounded p-2 text-gray-200 text-xs focus:outline-none focus:border-emerald-500">
 
@@ -418,6 +450,7 @@
         // アプリケーション状態変数
         let currentTab = 'capture';
         let rawImage = null;
+        let unenhancedWarpedCanvas = null; // 切出直後の無加工キャンバスを保持
         let stream = null;
         let activeFacingMode = "environment";
         let availableVideoDevices = [];
@@ -457,6 +490,12 @@
             { x: 0.15, y: 0.85 }
         ];
         let draggingCornerIndex = -1;
+
+        // 画像前処理調整用パラメータ
+        let contrastVal = 140;
+        let blackOffsetVal = 25;
+        let gammaVal = 0.80;
+        let useGreenGrayscale = true;
 
         // 解析調整用パラメータ
         let wellYRatio = 0.10;
@@ -1005,6 +1044,7 @@
 
         function loadRawImage(img, nameLabel) {
             rawImage = img;
+            unenhancedWarpedCanvas = null;
             setCenterFocusCorners();
             updateBaseImageCanvas();
 
@@ -1358,15 +1398,84 @@
             }
 
             wCtx.putImageData(dstData, 0, 0);
+            unenhancedWarpedCanvas = warpedCanvas; // 保存
 
-            const warpedImg = new Image();
-            warpedImg.onload = () => {
-                rawImage = warpedImg;
-                updateBaseImageCanvas();
-                switchTab('analysis');
-                runFullAutoAnalysis();
-            };
-            warpedImg.src = warpedCanvas.toDataURL();
+            switchTab('analysis');
+            updatePreProcessingAndAnalysis();
+        }
+
+        function updatePreProcessingAndAnalysis() {
+            if (!unenhancedWarpedCanvas) return;
+
+            contrastVal = parseInt(document.getElementById('slider-contrast')?.value || 140);
+            blackOffsetVal = parseInt(document.getElementById('slider-black-offset')?.value || 25);
+            gammaVal = parseFloat(document.getElementById('slider-gamma')?.value || 0.80);
+            useGreenGrayscale = document.getElementById('chk-green-grayscale')?.checked ?? true;
+
+            const elContrast = document.getElementById('val-contrast');
+            const elBlackOffset = document.getElementById('val-black-offset');
+            const elGamma = document.getElementById('val-gamma');
+
+            if (elContrast) elContrast.innerText = `${contrastVal}%`;
+            if (elBlackOffset) elBlackOffset.innerText = `${blackOffsetVal}`;
+            if (elGamma) elGamma.innerText = gammaVal.toFixed(2);
+
+            const w = unenhancedWarpedCanvas.width;
+            const h = unenhancedWarpedCanvas.height;
+
+            workingCanvas.width = w;
+            workingCanvas.height = h;
+            mainCanvas.width = w;
+            mainCanvas.height = h;
+
+            const wCtx = workingCanvas.getContext('2d');
+            wCtx.drawImage(unenhancedWarpedCanvas, 0, 0);
+
+            const imgData = wCtx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+
+            const factor = contrastVal / 100;
+            const invGamma = 1 / Math.max(0.01, gammaVal);
+
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i];
+                let g = data[i + 1];
+                let b = data[i + 2];
+
+                let gray;
+                if (useGreenGrayscale) {
+                    // DNA蛍光試薬の緑〜黄波長に重み付け
+                    gray = 0.15 * r + 0.75 * g + 0.10 * b;
+                } else {
+                    gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                }
+
+                // 黒レベルサブトラクション (背景を完全に純黒化)
+                gray = Math.max(0, gray - blackOffsetVal);
+
+                // コントラスト伸長
+                gray = (gray - 128) * factor + 128;
+                gray = Math.max(0, Math.min(255, gray));
+
+                // ガンマ補正 (暗部のバンドを浮き立たせる)
+                gray = 255 * Math.pow(gray / 255, invGamma);
+                gray = Math.max(0, Math.min(255, gray));
+
+                data[i]     = gray;
+                data[i + 1] = gray;
+                data[i + 2] = gray;
+            }
+
+            wCtx.putImageData(imgData, 0, 0);
+            updateAnalysisParams();
+        }
+
+        function resetPreProcessingParams() {
+            if (document.getElementById('slider-contrast')) document.getElementById('slider-contrast').value = 140;
+            if (document.getElementById('slider-black-offset')) document.getElementById('slider-black-offset').value = 25;
+            if (document.getElementById('slider-gamma')) document.getElementById('slider-gamma').value = 0.80;
+            if (document.getElementById('chk-green-grayscale')) document.getElementById('chk-green-grayscale').checked = true;
+            updatePreProcessingAndAnalysis();
         }
 
         function updateAnalysisParams() {
@@ -2004,6 +2113,7 @@
 
         function resetImage() {
             rawImage = null;
+            unenhancedWarpedCanvas = null;
 
             const liveBox = document.getElementById('live-container');
             if (liveBox) liveBox.classList.remove('hidden');
@@ -2092,7 +2202,6 @@
             link.click();
         }
 
-        // アプリケーション初期化
         function initApp() {
             mainCanvas = document.getElementById('main-canvas');
             if (mainCanvas) {
