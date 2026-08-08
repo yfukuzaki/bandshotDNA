@@ -2136,16 +2136,33 @@
         function downloadAnnotatedImage() {
             if (!workingCanvas.width || !mainCanvas) return;
 
-            const exportCanvas = document.createElement('canvas');
-            const headerHeight = 130;
-            const footerHeight = 160;
-
-            exportCanvas.width = mainCanvas.width;
-            exportCanvas.height = mainCanvas.height + headerHeight + footerHeight;
-            const eCtx = exportCanvas.getContext('2d');
-
-            eCtx.fillStyle = '#0f172a';
-            eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+            // テキスト自動折り返し処理用ヘルパー関数（改行コードおよび幅制限に対応）
+            function getWrappedLines(ctx, text, maxWidth) {
+                if (!text) return [];
+                const rawLines = text.split('\n');
+                const lines = [];
+                for (const rawLine of rawLines) {
+                    if (rawLine === '') {
+                        lines.push('');
+                        continue;
+                    }
+                    let currentLine = '';
+                    for (let i = 0; i < rawLine.length; i++) {
+                        const char = rawLine[i];
+                        const testLine = currentLine + char;
+                        if (ctx.measureText(testLine).width > maxWidth && currentLine.length > 0) {
+                            lines.push(currentLine);
+                            currentLine = char;
+                        } else {
+                            currentLine = testLine;
+                        }
+                    }
+                    if (currentLine) {
+                        lines.push(currentLine);
+                    }
+                }
+                return lines;
+            }
 
             const title = document.getElementById('report-title')?.value || 'Gel Analysis Result';
             const agarose = document.getElementById('report-agarose')?.value || '';
@@ -2154,18 +2171,92 @@
             const notes = document.getElementById('report-notes')?.value || '';
             const dateStr = new Date().toLocaleString('ja-JP');
 
+            const paddingX = 20;
+            const maxTextWidth = Math.max(100, mainCanvas.width - paddingX * 2);
+
+            // レイアウト計算用の作業Ctx
+            const dummyCanvas = document.createElement('canvas');
+            dummyCanvas.width = mainCanvas.width;
+            const dCtx = dummyCanvas.getContext('2d');
+
+            dCtx.font = 'bold 22px sans-serif';
+            const titleLines = getWrappedLines(dCtx, title, maxTextWidth);
+
+            dCtx.font = '13px sans-serif';
+            const meta1Text = `解析日時: ${dateStr}${location ? '  |  実験場所: ' + location : ''}`;
+            const meta1Lines = getWrappedLines(dCtx, meta1Text, maxTextWidth);
+
+            const meta2Text = `アガロース濃度: ${agarose}${stain ? '  |  核酸染色試薬: ' + stain : ''}`;
+            const meta2Lines = getWrappedLines(dCtx, meta2Text, maxTextWidth);
+
+            let notesLines = [];
+            if (notes.trim()) {
+                const fullNotesText = `実験メモ・所感: ${notes}`;
+                notesLines = getWrappedLines(dCtx, fullNotesText, maxTextWidth);
+            }
+
+            // テキスト行数に応じた動的ヘッダー高さの計算
+            let calculatedHeaderH = 15;
+            calculatedHeaderH += (titleLines.length || 1) * 28 + 6;
+            calculatedHeaderH += (meta1Lines.length || 1) * 20 + 2;
+            calculatedHeaderH += (meta2Lines.length || 1) * 20 + 2;
+            if (notesLines.length > 0) {
+                calculatedHeaderH += notesLines.length * 20 + 4;
+            }
+            calculatedHeaderH += 15; // ゲル画像との間隔余白
+
+            const headerHeight = Math.max(120, Math.ceil(calculatedHeaderH));
+            const footerHeight = 160;
+
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = mainCanvas.width;
+            exportCanvas.height = mainCanvas.height + headerHeight + footerHeight;
+            const eCtx = exportCanvas.getContext('2d');
+
+            // 背景描画
+            eCtx.fillStyle = '#0f172a';
+            eCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+            // ヘッダーテキスト描画
+            let drawY = 15;
+
+            // タイトル
             eCtx.fillStyle = '#10b981';
             eCtx.font = 'bold 22px sans-serif';
-            eCtx.fillText(title, 20, 34);
+            for (const line of titleLines) {
+                drawY += 26;
+                eCtx.fillText(line, paddingX, drawY);
+            }
+            drawY += 8;
 
+            // メタ情報 (日時・場所・試薬)
             eCtx.fillStyle = '#cbd5e1';
             eCtx.font = '13px sans-serif';
-            eCtx.fillText(`解析日時: ${dateStr}  |  実験場所: ${location}`, 20, 58);
-            eCtx.fillText(`アガロース濃度: ${agarose}  |  核酸染色試薬: ${stain}`, 20, 80);
-            if (notes) eCtx.fillText(`実験メモ・所感: ${notes}`, 20, 102);
+            for (const line of meta1Lines) {
+                drawY += 19;
+                eCtx.fillText(line, paddingX, drawY);
+            }
+            drawY += 2;
 
+            for (const line of meta2Lines) {
+                drawY += 19;
+                eCtx.fillText(line, paddingX, drawY);
+            }
+            drawY += 2;
+
+            // 実験メモ・所感 (折り返し対応描画)
+            if (notesLines.length > 0) {
+                eCtx.fillStyle = '#94a3b8';
+                for (const line of notesLines) {
+                    drawY += 19;
+                    eCtx.fillText(line, paddingX, drawY);
+                }
+            }
+
+            // メインゲル画像描画（動的ヘッダーの直下に正確に配置）
             eCtx.drawImage(mainCanvas, 0, headerHeight);
 
+            // フッター描画
             const footerY = headerHeight + mainCanvas.height + 20;
             eCtx.fillStyle = '#1e293b';
             eCtx.fillRect(10, footerY, exportCanvas.width - 20, footerHeight - 30);
