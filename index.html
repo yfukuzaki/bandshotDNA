@@ -325,6 +325,15 @@
                             </button>
                         </div>
 
+                        <!-- マーカーラベル表示密度設定（主要4点 vs 全表示） -->
+                        <div class="flex items-center justify-between pt-1 border-t border-gray-800/60">
+                            <span class="text-gray-400 text-[10px]">マーカー表示数:</span>
+                            <div class="flex space-x-1 bg-gray-950 p-0.5 rounded-md border border-gray-800">
+                                <button id="btn-marker-key" onclick="setLadderLabelMode('key')" class="px-2 py-0.5 text-[10px] font-bold rounded bg-amber-600 text-white shadow" title="100, 500, 1000, 1500 bpのみ表示">主要4点</button>
+                                <button id="btn-marker-all" onclick="setLadderLabelMode('all')" class="px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-200" title="すべてのバンド数値を表示">全表示</button>
+                            </div>
+                        </div>
+
                         <div class="flex items-center justify-between pt-1 border-t border-gray-800/60">
                             <span class="text-gray-400 text-[10px]">注釈の表示詳細:</span>
                             <div class="flex space-x-1 bg-gray-950 p-0.5 rounded-md border border-gray-800">
@@ -456,6 +465,7 @@
         let availableVideoDevices = [];
         let currentDeviceIndex = 0;
         let displayMode = 'bp';
+        let ladderLabelMode = 'key'; // 'key' (主要4点: 1500, 1000, 500, 100) または 'all' (全表示)
         let currentAspectRatio = '1:1';
 
         // 表示切替フラグ
@@ -644,6 +654,22 @@
                 } else {
                     btnBoth.className = "px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-600 text-white shadow";
                     btnBp.className = "px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-200";
+                }
+            }
+            renderAll();
+        }
+
+        function setLadderLabelMode(mode) {
+            ladderLabelMode = mode;
+            const btnKey = document.getElementById('btn-marker-key');
+            const btnAll = document.getElementById('btn-marker-all');
+            if (btnKey && btnAll) {
+                if (mode === 'key') {
+                    btnKey.className = "px-2 py-0.5 text-[10px] font-bold rounded bg-amber-600 text-white shadow";
+                    btnAll.className = "px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-200";
+                } else {
+                    btnAll.className = "px-2 py-0.5 text-[10px] font-bold rounded bg-amber-600 text-white shadow";
+                    btnKey.className = "px-2 py-0.5 text-[10px] font-medium text-gray-400 hover:text-gray-200";
                 }
             }
             renderAll();
@@ -1935,34 +1961,14 @@
 
                         if (isLadder) {
                             const sortedLadderPeaks = [...lane.peaks].sort((a, b) => a.y - b.y);
-                            const labelYPos = sortedLadderPeaks.map(p => p.y);
-                            const minSpacing = 16;
 
-                            // パス1: 上から下へ (500bp/1000bpの真横固定基準を崩さない)
-                            for (let i = 0; i < sortedLadderPeaks.length - 1; i++) {
-                                const nextBp = sortedLadderPeaks[i + 1].bp;
-                                const isNextRef = (nextBp === 1000 || nextBp === 500);
-                                if (labelYPos[i + 1] < labelYPos[i] + minSpacing) {
-                                    if (!isNextRef) {
-                                        labelYPos[i + 1] = labelYPos[i] + minSpacing;
-                                    }
-                                }
-                            }
-
-                            // パス2: 下から上へ
-                            for (let i = sortedLadderPeaks.length - 1; i > 0; i--) {
-                                const prevBp = sortedLadderPeaks[i - 1].bp;
-                                const isPrevRef = (prevBp === 1000 || prevBp === 500);
-                                if (labelYPos[i - 1] > labelYPos[i] - minSpacing) {
-                                    if (!isPrevRef) {
-                                        labelYPos[i - 1] = labelYPos[i] - minSpacing;
-                                    }
-                                }
-                            }
-
-                            sortedLadderPeaks.forEach((p, idx) => {
+                            sortedLadderPeaks.forEach((p) => {
                                 const isRefBand = (p.bp === 1000 || p.bp === 500);
+                                // 主要4点モード(key)の場合は 1500, 1000, 500, 100 bp のみラベルを描画
+                                const isKeyBand = (p.bp === 1500 || p.bp === 1000 || p.bp === 500 || p.bp === 100);
+                                const shouldDrawLabel = (ladderLabelMode === 'all') || isKeyBand;
 
+                                // バンド検出点のポインター描画
                                 mainCtx.beginPath();
                                 mainCtx.arc(x, p.y, isRefBand ? 6 : 4, 0, Math.PI * 2);
                                 mainCtx.fillStyle = isRefBand ? '#fbbf24' : '#f59e0b';
@@ -1973,7 +1979,8 @@
                                     mainCtx.stroke();
                                 }
 
-                                if (p.bp) {
+                                // 数値ラベル描画
+                                if (p.bp && shouldDrawLabel) {
                                     const labelText = displayMode === 'both' ? `${p.bp} bp (${p.ng || 0}ng)` : `${p.bp} bp`;
                                     mainCtx.font = isRefBand ? 'bold 13px sans-serif' : 'bold 11px sans-serif';
                                     const textMetrics = mainCtx.measureText(labelText);
@@ -1981,18 +1988,13 @@
                                     const padX = 6;
                                     const boxW = textW + padX * 2;
 
-                                    const labelY = isRefBand ? p.y : labelYPos[idx];
-                                    const labelX = Math.max(10, x - boxW - (isRefBand ? 22 : 35));
+                                    const labelY = p.y;
+                                    const labelX = Math.max(10, x - boxW - (isRefBand ? 22 : 28));
 
+                                    // 引き出し線
                                     mainCtx.beginPath();
-                                    if (isRefBand) {
-                                        mainCtx.moveTo(labelX + boxW, p.y);
-                                        mainCtx.lineTo(x - 8, p.y);
-                                    } else {
-                                        mainCtx.moveTo(labelX + boxW, labelY);
-                                        mainCtx.lineTo(x - 12, p.y);
-                                        mainCtx.lineTo(x - 4, p.y);
-                                    }
+                                    mainCtx.moveTo(labelX + boxW, labelY);
+                                    mainCtx.lineTo(x - (isRefBand ? 8 : 6), p.y);
                                     mainCtx.strokeStyle = isRefBand ? '#fbbf24' : '#f59e0b';
                                     mainCtx.lineWidth = isRefBand ? 2.0 : 1.2;
                                     mainCtx.stroke();
